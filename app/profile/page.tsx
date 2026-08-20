@@ -1,0 +1,25 @@
+import { ProfileForm } from "@/app/onboarding/profile-form";
+import { signOut } from "@/app/actions/auth";
+import { requireUserOrRedirect } from "@/lib/auth/session";
+import { getProfile } from "@/lib/data/profiles";
+
+export const dynamic = "force-dynamic";
+
+export default async function ProfilePage() {
+  const user = await requireUserOrRedirect("/profile");
+  const profile = await getProfile(user.id);
+
+  return (
+    <main className="centered-page">
+      <section className="auth-card">
+        <span className="eyebrow">Account</span>
+        <h1>{profile ? "Edit your profile" : "Create your profile"}</h1>
+        <p className="lede">Signed in as {user.email ?? "your Supabase account"}.</p>
+        <ProfileForm next="/dashboard" profile={profile} submitLabel="Save profile" />
+        <form action={signOut} className="secondary-action">
+          <button className="text-button" type="submit">Sign out</button>
+        </form>
+      </section>
+    </main>
+  );
+}

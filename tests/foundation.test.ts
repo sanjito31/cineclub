@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { RoomPhase } from "../app/generated/prisma/enums";
+import { categorizeDashboardRooms } from "../lib/domain/dashboard";
+import {
+  assertRoomPhaseTransition,
+  canTransitionRoomPhase,
+} from "../lib/domain/room-lifecycle";
+import {
+  normalizeLetterboxdUsername,
+  normalizeRoomCode,
+  safeNextPath,
+} from "../lib/validation/shared";
+
+test("room codes are normalized and ambiguous characters are rejected", () => {
+  assert.equal(normalizeRoomCode(" h3x9qk "), "H3X9QK");
+  assert.equal(normalizeRoomCode("MOVIE7"), null);
+  assert.equal(normalizeRoomCode("short"), null);
+});
+
+test("redirect destinations stay on the application origin", () => {
+  assert.equal(safeNextPath("/create/confirm"), "/create/confirm");
+  assert.equal(safeNextPath("//malicious.example"), "/");
+  assert.equal(safeNextPath("https://malicious.example"), "/");
+});
+
+test("Letterboxd usernames remain optional but reject unsafe values", () => {
+  assert.equal(normalizeLetterboxdUsername(" karsten "), "karsten");
+  assert.equal(normalizeLetterboxdUsername("movie_fan-92"), "movie_fan-92");
+  assert.equal(normalizeLetterboxdUsername(""), null);
+  assert.equal(normalizeLetterboxdUsername("profile/name"), null);
+});
+
+test("room lifecycle only permits the planned forward sequence", () => {
+  assert.equal(canTransitionRoomPhase(RoomPhase.SELECTION, RoomPhase.VOTING), true);
+  assert.equal(canTransitionRoomPhase(RoomPhase.VOTING, RoomPhase.REVEAL), false);
+  assert.throws(() => {
+    assertRoomPhaseTransition(RoomPhase.REVEAL, RoomPhase.VOTING);
+  }, /cannot move/);
+});
+
+test("dashboard separates hosted, joined, and completed rooms", () => {
+  const rooms = [
+    { id: "hosted", ownerId: "user-1", phase: RoomPhase.SELECTION },
+    { id: "joined", ownerId: "user-2", phase: RoomPhase.REVEAL },
+    { id: "completed-hosted", ownerId: "user-1", phase: RoomPhase.COMPLETE },
+    { id: "completed-joined", ownerId: "user-3", phase: RoomPhase.COMPLETE },
+  ];
+
+  const result = categorizeDashboardRooms(rooms, "user-1");
+
+  assert.deepEqual(result.hosting.map((room) => room.id), ["hosted"]);
+  assert.deepEqual(result.current.map((room) => room.id), ["joined"]);
+  assert.deepEqual(result.previous.map((room) => room.id), [
+    "completed-hosted",
+    "completed-joined",
+  ]);
+});
