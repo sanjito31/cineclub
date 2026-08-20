@@ -6,13 +6,24 @@ Cineclub should be implemented as a **server-authoritative room state machine** 
 
 The source design establishes four user-facing phases—onboarding, selection, voting, and reveal—and relies heavily on room membership plus asynchronous Letterboxd data. The proposed database section has the right basic entities, but votes, duplicate movie selections, room progress, and reveal state need more normalization.
 
+## Current implementation status
+
+Updated August 20, 2026.
+
+* **Chunk 1 is complete.** Prisma is connected to Supabase PostgreSQL, the schema is migrated, Supabase SSR authentication and profiles are implemented, and authenticated users can create or join an empty room.
+* **Chunk 2 is in progress.** Room creation, short codes, joining, capacity checks, the initial lobby, and participant list are implemented. Roster locking, host controls, automatic phase transitions, and the remaining concurrency tests are pending.
+* Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
+* The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
+* Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, and dashboard room grouping. Lint, TypeScript, tests, and the production build pass.
+
 ---
 
 # 1. Core Architecture Decisions
 
 ### Authentication and profiles
 
-Use Supabase Auth exclusively for identity and email OTP. Supabase supports email OTP through `signInWithOtp`/`verifyOtp`, and the server-side session should be validated rather than trusting client session data.
+Use Supabase Auth exclusively for identity and email Magic Links. The implementation calls `signInWithOtp`, which sends a Magic Link with the current email template, then completes the PKCE/token-hash callback on the server. Validate the cookie-backed session with `getClaims` rather than trusting client session data.
 
 Create an application `Profile` row keyed by the Supabase user's UUID:
 
@@ -25,16 +36,28 @@ Do **not** copy the user's email into every application table or into `Room.owne
 
 The Letterboxd API can confirm that a username exists, but unless it actually authenticates ownership, treat the username as a **claimed Letterboxd profile**, not a verified identity.
 
+The current onboarding UI checks claimed usernames through the server-side Watchboxd client. A successful lookup canonicalizes the stored username and displays the returned avatar and username, but it does not prove ownership of that Letterboxd account.
+
 ### Room creation before login
 
 Preserve the requested UX but do not create anonymous database rooms.
 
 1. User enters room settings.
-2. Keep that configuration as temporary client/session state.
-3. Perform OTP authentication.
+2. Keep that configuration in same-origin browser storage so it survives a Magic Link opening in a new tab.
+3. If there is no valid Supabase session cookie, perform Magic Link authentication. Existing sessions skip this step.
 4. After successful authentication, create the room, generate its code, and add the host as its first participant in one transaction.
 
 This eliminates abandoned unauthenticated room rows while producing the same visible flow described in the design.
+
+### Authenticated dashboard
+
+When authentication does not carry a specific create/join destination, redirect to `/dashboard` rather than the public marketing page. The dashboard groups room memberships into:
+
+* active rooms owned by the user
+* active rooms joined by the user
+* completed rooms the user hosted or joined
+
+The dashboard is server-rendered from the authenticated user's room memberships. Room codes remain visible for sharing, but opening an existing room does not require re-entering its code.
 
 ### Room code
 
@@ -409,61 +432,64 @@ Enable RLS on exposed Supabase tables even if normal access goes through Prisma;
 
 # Implementation Roadmap
 
-## Chunk 1 — Foundation
+## Chunk 1 — Foundation — Complete
 
 **Dependency: none**
 
 Backend/DB:
 
-* configure Prisma + Supabase PostgreSQL
-* implement schema above
-* migrations and indexes
-* Supabase SSR authentication
-* profile creation/update
-* authorization helpers
-* room lifecycle enum and domain services
+* [x] configure Prisma + Supabase PostgreSQL
+* [x] implement schema above
+* [x] migrations and indexes
+* [x] Supabase SSR authentication with cookie refresh and server-side claim validation
+* [x] Magic Link request and callback flow with safe destination preservation
+* [x] profile creation/update
+* [x] optional Letterboxd username validation through Watchboxd
+* [x] authorization helpers
+* [x] room lifecycle enum and transition guards
 
 Frontend, in parallel:
 
-* base app shell
-* Create Room flow
-* Join Room/code flow
-* OTP UI
-* profile onboarding UI
+* [x] base app shell
+* [x] Create Room flow with browser-persisted draft and authenticated review step
+* [x] Join Room/code flow
+* [x] Magic Link UI and check-your-email state (changed from typed OTP UI)
+* [x] profile onboarding UI with Letterboxd lookup states and matched-profile preview
+* [x] authenticated room dashboard and default post-login destination
 
-**Milestone:** authenticated user can create or join an empty room.
+**Milestone achieved:** authenticated user can create or join an empty room and reopen it from the dashboard.
 
 ---
 
-## Chunk 2 — Room Membership and State Machine
+## Chunk 2 — Room Membership and State Machine — In progress
 
 **Depends on Chunk 1**
 
 Backend:
 
-* room creation transaction
-* short-code generation
-* participant joining
-* capacity enforcement
-* roster locking
-* server-side phase transition service
+* [x] room creation as an atomic nested write that also adds the host participant
+* [x] collision-resistant short-code generation with retry handling
+* [x] idempotent participant joining
+* [x] capacity, join-deadline, and existing-lock enforcement in a serializable transaction
+* [ ] roster locking mutation
+* [ ] server-side phase transition service
 
 Frontend, in parallel:
 
-* room lobby
-* participant list
-* host controls
-* waiting/progress UI
-* join/share link UI
+* [x] initial room lobby
+* [x] participant list
+* [ ] host controls
+* [ ] waiting/progress UI
+* [ ] **Partial:** join confirmation and share URL display are implemented; copy/share controls remain
 
 Tests:
 
-* duplicate joining
-* capacity race
-* non-owner host actions
-* locked roster behavior
+* [ ] duplicate joining
+* [ ] capacity race
+* [ ] non-owner host actions
+* [ ] locked roster behavior
 
-**Milestone:** a stable participant roster can progress through room states correctly.
+**Milestone pending:** a stable participant roster can progress through room states correctly.
 
 ---
 
@@ -473,17 +499,17 @@ Tests:
 
 **Agent A — integration**
 
-* TMDB search service
-* Watchboxd user/watchlist/watched/overlap client
-* 200/202 polling abstraction
+* [ ] TMDB search service
+* [ ] **Partial:** Watchboxd user lookup is implemented for onboarding; watchlist, watched-history, and overlap methods remain
+* [ ] **Partial:** onboarding handles `200`, `202`, `404`, and unavailable lookup states; reusable movie/finalization polling remains
 
 **Agent B — backend**
 
-* `room_movies`
-* nomination submission transaction
-* duplicate detection
-* selection validation
-* selection completion transition
+* [x] `room_movies` and `nominations` database models and constraints
+* [ ] nomination submission transaction
+* [ ] duplicate detection service
+* [ ] selection validation
+* [ ] selection completion transition
 
 **Agent C — frontend**
 
@@ -505,7 +531,7 @@ Can begin as soon as the nomination schema/API contract is frozen.
 
 Backend:
 
-* ballot schema/API
+* [ ] ballot API (**database schema and constraints are complete**)
 * coverage validation
 * atomic submission
 * voting completion transition
@@ -532,7 +558,7 @@ Can be built in parallel with most Voting UI work.
 * finalist selection
 * Watchboxd pending-rating handling
 * spooky-ordering interface
-* immutable `room_movie_results`
+* immutable `room_movie_results` (**database schema and constraints are complete; finalization write is pending**)
 * idempotent finalization endpoint
 
 Build this primarily as pure functions so the algorithm can be exhaustively unit-tested without the database.
