@@ -1,0 +1,173 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["cineclub"]
+}
+
+enum RoomPhase {
+  SELECTION
+  VOTING
+  FINALIZING
+  REVEAL
+  COMPLETE
+
+  @@map("room_phase")
+  @@schema("cineclub")
+}
+
+model Profile {
+  id                 String            @id(map: "profiles_pkey") @db.Uuid
+  displayName        String            @map("display_name")
+  letterboxdUsername String?           @map("letterboxd_username")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  ownedRooms         Room[]            @relation("RoomOwner")
+  roomParticipations RoomParticipant[]
+
+  @@map("profiles")
+  @@schema("cineclub")
+}
+
+model Room {
+  id                         String            @id(map: "rooms_pkey") @default(uuid(7)) @db.Uuid
+  code                       String            @unique(map: "rooms_code_key")
+  ownerId                    String            @map("owner_id") @db.Uuid
+  name                       String
+  phase                      RoomPhase         @default(SELECTION)
+  maxParticipants            Int               @map("max_participants") @db.SmallInt
+  selectionsPerUser          Int               @map("selections_per_user") @db.SmallInt
+  requireParticipantCoverage Boolean           @default(true) @map("require_participant_coverage")
+  rosterLockedAt             DateTime?         @map("roster_locked_at") @db.Timestamptz(6)
+  joinDeadline               DateTime?         @map("join_deadline") @db.Timestamptz(6)
+  selectionDeadline          DateTime?         @map("selection_deadline") @db.Timestamptz(6)
+  votingDeadline             DateTime?         @map("voting_deadline") @db.Timestamptz(6)
+  finalizedAt                DateTime?         @map("finalized_at") @db.Timestamptz(6)
+  createdAt                  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  owner                      Profile           @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  participants               RoomParticipant[]
+  movies                     RoomMovie[]
+
+  @@index([ownerId], map: "rooms_owner_id_idx")
+  @@map("rooms")
+  @@schema("cineclub")
+}
+
+model RoomParticipant {
+  id                         String       @id(map: "room_participants_pkey") @default(uuid(7)) @db.Uuid
+  roomId                     String       @map("room_id") @db.Uuid
+  userId                     String       @map("user_id") @db.Uuid
+  joinedAt                   DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  selectionSubmittedAt       DateTime?    @map("selection_submitted_at") @db.Timestamptz(6)
+  votingSubmittedAt          DateTime?    @map("voting_submitted_at") @db.Timestamptz(6)
+  letterboxdUsernameSnapshot String       @map("letterboxd_username_snapshot")
+  room                       Room         @relation(fields: [roomId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user                       Profile      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  nominations                Nomination[]
+  ballots                    Ballot[]
+
+  @@unique([roomId, userId], map: "room_participants_room_id_user_id_key")
+  @@unique([roomId, id], map: "room_participants_room_id_id_key")
+  @@index([userId], map: "room_participants_user_id_idx")
+  @@map("room_participants")
+  @@schema("cineclub")
+}
+
+model RoomMovie {
+  id               String           @id(map: "room_movies_pkey") @default(uuid(7)) @db.Uuid
+  roomId           String           @map("room_id") @db.Uuid
+  tmdbId           Int              @map("tmdb_id")
+  title            String
+  releaseYear      Int?             @map("release_year") @db.SmallInt
+  posterPath       String?          @map("poster_path")
+  letterboxdSlug   String?          @map("letterboxd_slug")
+  letterboxdRating Decimal?         @map("letterboxd_rating") @db.Decimal(3, 2)
+  ratingFetchedAt  DateTime?        @map("rating_fetched_at") @db.Timestamptz(6)
+  letterboxdJobId  String?          @map("letterboxd_job_id")
+  room             Room             @relation(fields: [roomId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  nominations      Nomination[]
+  ballotRanks      BallotRank[]
+  result           RoomMovieResult?
+
+  @@unique([roomId, tmdbId], map: "room_movies_room_id_tmdb_id_key")
+  @@unique([roomId, id], map: "room_movies_room_id_id_key")
+  @@map("room_movies")
+  @@schema("cineclub")
+}
+
+model Nomination {
+  id            String          @id(map: "nominations_pkey") @default(uuid(7)) @db.Uuid
+  roomId        String          @map("room_id") @db.Uuid
+  participantId String          @map("participant_id") @db.Uuid
+  roomMovieId   String          @map("room_movie_id") @db.Uuid
+  slotIndex     Int             @map("slot_index") @db.SmallInt
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  participant   RoomParticipant @relation(fields: [roomId, participantId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+  roomMovie     RoomMovie       @relation(fields: [roomId, roomMovieId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([participantId, slotIndex], map: "nominations_participant_id_slot_index_key")
+  @@unique([participantId, roomMovieId], map: "nominations_participant_id_room_movie_id_key")
+  @@index([roomId, participantId], map: "nominations_room_id_participant_id_idx")
+  @@index([roomId, roomMovieId], map: "nominations_room_id_room_movie_id_idx")
+  @@map("nominations")
+  @@schema("cineclub")
+}
+
+model Ballot {
+  id            String          @id(map: "ballots_pkey") @default(uuid(7)) @db.Uuid
+  roomId        String          @map("room_id") @db.Uuid
+  participantId String          @map("participant_id") @db.Uuid
+  submittedAt   DateTime        @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  participant   RoomParticipant @relation(fields: [roomId, participantId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+  ranks         BallotRank[]
+
+  @@unique([roomId, participantId], map: "ballots_room_id_participant_id_key")
+  @@unique([roomId, id], map: "ballots_room_id_id_key")
+  @@map("ballots")
+  @@schema("cineclub")
+}
+
+model BallotRank {
+  roomId      String    @map("room_id") @db.Uuid
+  ballotId    String    @map("ballot_id") @db.Uuid
+  roomMovieId String    @map("room_movie_id") @db.Uuid
+  rank        Int       @db.SmallInt
+  ballot      Ballot    @relation(fields: [roomId, ballotId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+  roomMovie   RoomMovie @relation(fields: [roomId, roomMovieId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([ballotId, roomMovieId], map: "ballot_ranks_pkey")
+  @@unique([ballotId, rank], map: "ballot_ranks_ballot_id_rank_key")
+  @@index([roomId, ballotId], map: "ballot_ranks_room_id_ballot_id_idx")
+  @@index([roomId, roomMovieId], map: "ballot_ranks_room_id_room_movie_id_idx")
+  @@map("ballot_ranks")
+  @@schema("cineclub")
+}
+
+model RoomMovieResult {
+  roomId            String    @map("room_id") @db.Uuid
+  roomMovieId       String    @map("room_movie_id") @db.Uuid
+  aggregateScore    Int       @map("aggregate_score")
+  aggregateRank     Int       @map("aggregate_rank") @db.SmallInt
+  tieBreakRating    Decimal?  @map("tie_break_rating") @db.Decimal(3, 2)
+  tieBreakRandom    Float     @map("tie_break_random") @db.DoublePrecision
+  isFinalist        Boolean   @default(false) @map("is_finalist")
+  finalOrder        Int?      @map("final_order") @db.SmallInt
+  scheduledRevealAt DateTime? @map("scheduled_reveal_at") @db.Timestamptz(6)
+  revealedAt        DateTime? @map("revealed_at") @db.Timestamptz(6)
+  roomMovie         RoomMovie @relation(fields: [roomId, roomMovieId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([roomId, roomMovieId], map: "room_movie_results_pkey")
+  @@unique([roomId, aggregateRank], map: "room_movie_results_room_id_aggregate_rank_key")
+  @@unique([roomId, finalOrder], map: "room_movie_results_room_id_final_order_key")
+  @@map("room_movie_results")
+  @@schema("cineclub")
+}
