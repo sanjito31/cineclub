@@ -12,10 +12,13 @@ Updated August 20, 2026.
 
 * **Chunk 1 is complete.** Prisma is connected to Supabase PostgreSQL, the schema is migrated, Supabase SSR authentication and profiles are implemented, and authenticated users can create or join an empty room.
 * **Chunk 2 is complete.** Room creation, short codes, joining, capacity checks, roster locking, host controls, progress UI, and server-side phase transitions are implemented and covered by concurrency and authorization tests.
+* **Chunk 3 is mostly complete.** Participants can search TMDB through a server-owned endpoint, submit atomic nominations before the roster is locked, and automatically advance the room to voting once the roster is locked and everyone has submitted. Same-user duplicate selections are rejected; cross-participant duplicates remain anonymous warnings and share one `room_movie`. The “someone already watched this” warning is **not done** and is deferred.
 * Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
 * The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
 * Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
-* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, and transactional phase transitions. Lint, TypeScript, tests, and the production build pass.
+* Watchboxd watchlist, watched-history, overlap, movie, and job methods share reusable `200`/`202`/`404`/unavailable handling and bounded polling. HTTP `200` with `data: null` and `meta.jobs` is treated as pending, the same as `202`. Selection search returns TMDB snapshots and TMDB ratings immediately, plus a Letterboxd rating when Watchboxd is ready or a pending job id when it is not. The browser polls Cineclub rating and overlap endpoints and silently fills Letterboxd ratings and overlap suggestions without blocking search or nomination.
+* Selection lives on `/rooms/[code]/select`, separate from the lobby. Search results paginate five at a time, open TMDB in a new tab, and show poster, title, year, TMDB rating, and Letterboxd rating. Ratings use logo pills (TMDB blue, Letterboxd green, translucent fills, lighter outlines, white scores). Overlap suggestions sit below the slots: top 10 shared watchlist films with poster, title, year, and Letterboxd rating, linking to Letterboxd.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, and silent Letterboxd rating fill. Lint, TypeScript, tests, and the production build pass.
 
 ---
 
@@ -493,35 +496,38 @@ Tests:
 
 ---
 
-## Chunk 3 — Movie Selection
+## Chunk 3 — Movie Selection — Mostly complete
 
 **Depends on room contracts; work can split three ways**
 
 **Agent A — integration**
 
-* [ ] TMDB search service
-* [ ] **Partial:** Watchboxd user lookup is implemented for onboarding; watchlist, watched-history, and overlap methods remain
-* [ ] **Partial:** onboarding handles `200`, `202`, `404`, and unavailable lookup states; reusable movie/finalization polling remains
+* [x] TMDB search service
+* [x] Watchboxd user lookup, watchlist, watched-history, overlap, movie, and job methods
+* [x] reusable `200`/`202`/`404`/unavailable handling and bounded polling for movie/finalization workflows, including `200` + `data: null` + `meta.jobs` pending envelopes
+* [x] overlap suggestions from participant Letterboxd usernames, top 10, with client polling for pending Watchboxd jobs
+* [x] TMDB search ratings plus non-blocking Letterboxd rating fill (poll until ready, then silently fill)
+* [ ] room-member watched-list warnings (“someone already watched this”) — **deferred; come back later.** Watchboxd watched lists often omit TMDB ids until they resolve, so this is not reliable enough to ship yet.
 
 **Agent B — backend**
 
 * [x] `room_movies` and `nominations` database models and constraints
-* [ ] nomination submission transaction
-* [ ] duplicate detection service
-* [ ] selection validation
-* [ ] selection completion transition
+* [x] nomination submission transaction
+* [x] duplicate detection service
+* [x] selection validation
+* [x] selection completion transition (voting still waits until the roster is locked)
 
 **Agent C — frontend**
 
-* selection slots
-* search UI
-* replace/remove actions
-* overlap suggestions
-* watched warnings
-* duplicate warnings
-* Letterboxd rating display
+* [x] selection slots on `/rooms/[code]/select`, separate from the lobby
+* [x] search UI (posters, 5 results per page, TMDB links, Choose stays separate)
+* [x] replace/remove actions
+* [x] overlap suggestions (poster, title, year, Letterboxd rating; row opens Letterboxd)
+* [ ] watched warnings — deferred with Agent A
+* [x] duplicate warnings (anonymous: already chosen by someone else)
+* [x] TMDB and Letterboxd rating pills (logos, translucent brand fills, lighter outlines, white scores)
 
-**Milestone:** every locked participant can submit selections and room automatically reaches voting.
+**Milestone achieved:** every participant can submit selections; once the roster is locked and everyone has submitted, the room automatically reaches voting. Watched-list warnings are the remaining Chunk 3 follow-up.
 
 ---
 

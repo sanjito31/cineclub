@@ -1,6 +1,11 @@
 import "server-only";
 
-const defaultWatchboxdUrl = "https://watchboxd.vercel.app";
+import type { AsyncResourceResult } from "@/lib/integrations/async-resource";
+import {
+  WatchboxdClient,
+  type WatchboxdDecoder,
+  type WatchboxdRequestOptions,
+} from "@/lib/watchboxd/core";
 
 export type WatchboxdProfile = {
   username: string;
@@ -11,7 +16,7 @@ export type WatchboxdProfile = {
 
 export type WatchboxdUserLookup =
   | { status: "ready"; profile: WatchboxdProfile }
-  | { status: "pending"; retryAfter: number }
+  | { status: "pending"; retryAfter: number; jobId: string | null }
   | { status: "not_found" }
   | { status: "unavailable" };
 
@@ -33,36 +38,78 @@ function readProfile(value: unknown): WatchboxdProfile | null {
   };
 }
 
-function getRetryAfter(response: Response) {
-  const retryAfter = Number(response.headers.get("retry-after"));
-  return Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 10) : 2;
+function createClient() {
+  return new WatchboxdClient({
+    baseUrl: process.env.WATCHBOXD_API_URL?.trim() || undefined,
+  });
 }
 
 export async function lookupWatchboxdUser(username: string): Promise<WatchboxdUserLookup> {
   try {
-    const baseUrl = process.env.WATCHBOXD_API_URL ?? defaultWatchboxdUrl;
-    const url = new URL(`/api/v1/users/${encodeURIComponent(username)}`, baseUrl);
-    const response = await fetch(url, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
-    });
-
-    if (response.status === 202) {
-      return { status: "pending", retryAfter: getRetryAfter(response) };
+    const result = await createClient().user(username, readProfile);
+    if (result.status === "ready") {
+      return { status: "ready", profile: result.data };
     }
-
-    if (response.status === 404) {
-      return { status: "not_found" };
+    if (result.status === "pending") {
+      return result;
     }
-
-    if (!response.ok) {
-      return { status: "unavailable" };
+    if (result.status === "not_found") {
+      return result;
     }
-
-    const profile = readProfile(await response.json());
-    return profile ? { status: "ready", profile } : { status: "unavailable" };
+    return { status: "unavailable" };
   } catch {
     return { status: "unavailable" };
   }
 }
+
+export function getWatchboxdMovie<T>(
+  tmdbId: number,
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().movie(tmdbId, decode, options);
+}
+
+export function getWatchboxdWatchlist<T>(
+  username: string,
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().watchlist(username, decode, options);
+}
+
+export function getWatchboxdWatchedHistory<T>(
+  username: string,
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().watchedHistory(username, decode, options);
+}
+
+export function getWatchboxdOverlap<T>(
+  usernames: readonly string[],
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().overlap(usernames, decode, options);
+}
+
+export function getWatchboxdJob<T>(
+  jobId: string,
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().job(jobId, decode, options);
+}
+
+export type {
+  AsyncResourcePollResult,
+  AsyncResourceResult,
+  PollAsyncResourceOptions,
+} from "@/lib/integrations/async-resource";
+export { pollAsyncResource } from "@/lib/integrations/async-resource";
+export { WatchboxdInputError } from "@/lib/watchboxd/core";
+export type {
+  WatchboxdDecoder,
+  WatchboxdRequestOptions,
+} from "@/lib/watchboxd/core";

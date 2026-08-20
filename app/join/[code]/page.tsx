@@ -4,6 +4,7 @@ import { JoinRoomForm } from "@/app/join/[code]/join-room-form";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { getRoomPreview } from "@/lib/data/rooms";
+import { roomTaskPath } from "@/lib/domain/room-paths";
 import { normalizeRoomCode } from "@/lib/validation/shared";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function JoinRoomPage({
     return <InvalidRoom message={error instanceof Error ? error.message : "Unable to find that room."} />;
   }
 
-  if (room.isMember) redirect(`/rooms/${room.code}`);
+  if (room.isMember) redirect(roomTaskPath(room.code, room.phase));
   const unavailable = room.rosterLocked || room.participantCount >= room.maxParticipants;
 
   return (

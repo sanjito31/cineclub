@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { createRoom, joinRoom, lockRoster } from "@/lib/domain/rooms";
+import { roomHomePath, roomSelectionPath, roomVotingPath } from "@/lib/domain/room-paths";
 import { normalizeRoomCode, readString } from "@/lib/validation/shared";
 import type { ActionState } from "@/app/actions/types";
 
@@ -61,7 +62,7 @@ export async function createRoomAction(
     };
   }
 
-  redirect(`/rooms/${code}?created=1`);
+  redirect(`${roomHomePath(code)}?created=1`);
 }
 
 export async function joinRoomAction(
@@ -84,7 +85,7 @@ export async function joinRoomAction(
     };
   }
 
-  redirect(`/rooms/${code}`);
+  redirect(roomSelectionPath(code));
 }
 
 export async function lockRoomRosterAction(
@@ -101,7 +102,9 @@ export async function lockRoomRosterAction(
     const user = await requireUser();
     const result = await lockRoster({ userId: user.id, code });
 
-    revalidatePath(`/rooms/${code}`);
+    revalidatePath(roomHomePath(code));
+    revalidatePath(roomSelectionPath(code));
+    revalidatePath(roomVotingPath(code));
     revalidatePath("/dashboard");
 
     return {

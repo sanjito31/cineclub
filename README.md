@@ -12,6 +12,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 DATABASE_URL=postgresql://your-runtime-pooler-url
 DIRECT_URL=postgresql://your-migration-url
+TMDB_API_READ_ACCESS_TOKEN=your-server-side-tmdb-read-token
 ```
 
 The publishable key is designed for browser use. Never put a Supabase secret/service-role key in a `NEXT_PUBLIC_` variable.
@@ -19,6 +20,11 @@ The publishable key is designed for browser use. Never put a Supabase secret/ser
 In Supabase Authentication → URL Configuration, allow the callback URLs used by each environment, including `http://localhost:3000/auth/confirm` during local development and `https://your-domain.example/auth/confirm` in production. The default Magic Link template can remain unchanged; Cineclub passes this callback through `emailRedirectTo` and exchanges the returned PKCE code for a cookie-backed session.
 
 `WATCHBOXD_API_URL` can override the default `https://watchboxd.vercel.app` server-side integration URL when needed.
+
+TMDB search accepts either `TMDB_API_READ_ACCESS_TOKEN` (preferred) or
+`TMDB_API_KEY`. Both are server-only credentials; do not prefix either with
+`NEXT_PUBLIC_`. `TMDB_API_URL` can override the default
+`https://api.themoviedb.org/3` integration URL for controlled environments.
 
 Apply migrations and regenerate Prisma Client before running the app:
 

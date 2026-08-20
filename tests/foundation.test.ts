@@ -6,6 +6,7 @@ import {
   assertRoomPhaseTransition,
   canTransitionRoomPhase,
 } from "../lib/domain/room-lifecycle";
+import { roomHomePath, roomTaskPath } from "../lib/domain/room-paths";
 import {
   normalizeLetterboxdUsername,
   normalizeRoomCode,
@@ -55,4 +56,10 @@ test("dashboard separates hosted, joined, and completed rooms", () => {
     "completed-hosted",
     "completed-joined",
   ]);
+});
+
+test("room task paths keep selection and voting off the lobby", () => {
+  assert.equal(roomTaskPath("ABC234", RoomPhase.SELECTION), "/rooms/ABC234/select");
+  assert.equal(roomTaskPath("ABC234", RoomPhase.VOTING), "/rooms/ABC234/vote");
+  assert.equal(roomTaskPath("ABC234", RoomPhase.REVEAL), roomHomePath("ABC234"));
 });

@@ -18,7 +18,9 @@ function phaseMessage({
   total: number;
 }) {
   if (!rosterLocked && phase === RoomPhase.SELECTION) {
-    return "The roster is still open. The host will lock it when everyone has joined.";
+    return completed === total
+      ? "Everyone currently in the room has submitted. The host can lock the roster to start voting."
+      : "You can start choosing movies now. The host will lock the roster when everyone has joined.";
   }
 
   if (phase === RoomPhase.SELECTION) {

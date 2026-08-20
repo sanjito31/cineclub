@@ -1,21 +1,19 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
 import { lockRoomRosterAction } from "@/app/actions/rooms";
 import { ClearRoomDraft } from "@/app/rooms/[code]/clear-room-draft";
 import { HostRosterControls } from "@/app/rooms/[code]/host-roster-controls";
+import { loadMemberRoom } from "@/app/rooms/[code]/load-room";
 import { RoomProgress } from "@/app/rooms/[code]/room-progress";
 import { ShareControls } from "@/app/rooms/[code]/share-controls";
 import { RoomPhase } from "@/app/generated/prisma/enums";
-import { requireUserOrRedirect } from "@/lib/auth/session";
-import { getRoomForMember } from "@/lib/data/rooms";
 import { roomPhaseLabels } from "@/lib/domain/room-lifecycle";
-import { normalizeRoomCode } from "@/lib/validation/shared";
+import { roomHomePath, roomTaskPath } from "@/lib/domain/room-paths";
 
 export const dynamic = "force-dynamic";
 
 type LobbyParticipant =
-  Awaited<ReturnType<typeof getRoomForMember>>["participants"][number];
+  Awaited<ReturnType<typeof loadMemberRoom>>["room"]["participants"][number];
 
 function participantStatus(participant: LobbyParticipant, phase: RoomPhase) {
   if (phase === RoomPhase.SELECTION) {
@@ -27,6 +25,16 @@ function participantStatus(participant: LobbyParticipant, phase: RoomPhase) {
   return "Phase complete";
 }
 
+function taskCta(phase: RoomPhase, submitted: boolean) {
+  if (phase === RoomPhase.SELECTION) {
+    return submitted ? "View your selections" : "Choose movies";
+  }
+  if (phase === RoomPhase.VOTING) {
+    return submitted ? "View voting" : "Rank movies";
+  }
+  return null;
+}
+
 export default async function RoomPage({
   params,
   searchParams,
@@ -36,20 +44,17 @@ export default async function RoomPage({
 }) {
   const { code: rawCode } = await params;
   const query = await searchParams;
-  const code = normalizeRoomCode(rawCode);
-  if (!code) redirect("/join");
-
-  const user = await requireUserOrRedirect(`/rooms/${code}`);
-  let room;
-  try {
-    room = await getRoomForMember(code, user.id);
-  } catch {
-    redirect(`/join/${code}`);
-  }
-
-  const isOwner = room.ownerId === user.id;
+  const { user, room, isOwner } = await loadMemberRoom(rawCode);
   const participants = room.participants;
   const rosterLocked = Boolean(room.rosterLockedAt);
+  const currentParticipant = participants.find(
+    (participant) => participant.userId === user.id,
+  );
+  const submitted = room.phase === RoomPhase.SELECTION
+    ? Boolean(currentParticipant?.selectionSubmittedAt)
+    : Boolean(currentParticipant?.votingSubmittedAt);
+  const ctaLabel = taskCta(room.phase, submitted);
+  const taskHref = roomTaskPath(room.code, room.phase);
 
   return (
     <main className="lobby-page">
@@ -63,6 +68,11 @@ export default async function RoomPage({
           <span className="eyebrow">{isOwner ? "You’re hosting" : "You’re in"}</span>
           <h1>{room.name}</h1>
           <p>{roomPhaseLabels[room.phase]} · {room.participants.length} of {room.maxParticipants} seats</p>
+          {ctaLabel && taskHref !== roomHomePath(room.code) ? (
+            <Link className="button button-primary lobby-task-cta" href={taskHref}>
+              {ctaLabel}
+            </Link>
+          ) : null}
         </div>
         <div className="room-code-card">
           <span>Room code</span>

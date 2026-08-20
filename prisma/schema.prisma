@@ -109,7 +109,7 @@ model Nomination {
   roomId        String          @map("room_id") @db.Uuid
   participantId String          @map("participant_id") @db.Uuid
   roomMovieId   String          @map("room_movie_id") @db.Uuid
-  slotIndex     Int             @map("slot_index") @db.SmallInt
+  slotIndex     Int             @map("slot_index") @db.SmallInt // 1-based; CHECK slot_index >= 1
   createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
   participant   RoomParticipant @relation(fields: [roomId, participantId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
   roomMovie     RoomMovie       @relation(fields: [roomId, roomMovieId], references: [roomId, id], onDelete: Cascade, onUpdate: NoAction)
