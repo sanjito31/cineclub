@@ -58,6 +58,8 @@ export async function getRoomForMember(code: string, userId: string) {
           id: true,
           userId: true,
           joinedAt: true,
+          selectionSubmittedAt: true,
+          votingSubmittedAt: true,
           user: { select: { displayName: true } },
         },
       },

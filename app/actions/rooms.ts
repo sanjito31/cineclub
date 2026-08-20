@@ -1,8 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { createRoom, joinRoom } from "@/lib/domain/rooms";
+import { createRoom, joinRoom, lockRoster } from "@/lib/domain/rooms";
 import { normalizeRoomCode, readString } from "@/lib/validation/shared";
 import type { ActionState } from "@/app/actions/types";
 
@@ -84,4 +85,36 @@ export async function joinRoomAction(
   }
 
   redirect(`/rooms/${code}`);
+}
+
+export async function lockRoomRosterAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+
+  if (!code) {
+    return { status: "error", message: "Enter a valid six-character room code." };
+  }
+
+  try {
+    const user = await requireUser();
+    const result = await lockRoster({ userId: user.id, code });
+
+    revalidatePath(`/rooms/${code}`);
+    revalidatePath("/dashboard");
+
+    return {
+      status: "success",
+      message: result.alreadyLocked
+        ? "This room's roster is already locked."
+        : "Roster locked. No new participants can join.",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error ? error.message : "Unable to lock the roster.",
+    };
+  }
 }

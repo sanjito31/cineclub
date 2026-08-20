@@ -11,11 +11,11 @@ The source design establishes four user-facing phases—onboarding, selection, v
 Updated August 20, 2026.
 
 * **Chunk 1 is complete.** Prisma is connected to Supabase PostgreSQL, the schema is migrated, Supabase SSR authentication and profiles are implemented, and authenticated users can create or join an empty room.
-* **Chunk 2 is in progress.** Room creation, short codes, joining, capacity checks, the initial lobby, and participant list are implemented. Roster locking, host controls, automatic phase transitions, and the remaining concurrency tests are pending.
+* **Chunk 2 is complete.** Room creation, short codes, joining, capacity checks, roster locking, host controls, progress UI, and server-side phase transitions are implemented and covered by concurrency and authorization tests.
 * Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
 * The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
 * Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
-* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, and dashboard room grouping. Lint, TypeScript, tests, and the production build pass.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, and transactional phase transitions. Lint, TypeScript, tests, and the production build pass.
 
 ---
 
@@ -461,7 +461,7 @@ Frontend, in parallel:
 
 ---
 
-## Chunk 2 — Room Membership and State Machine — In progress
+## Chunk 2 — Room Membership and State Machine — Complete
 
 **Depends on Chunk 1**
 
@@ -471,25 +471,25 @@ Backend:
 * [x] collision-resistant short-code generation with retry handling
 * [x] idempotent participant joining
 * [x] capacity, join-deadline, and existing-lock enforcement in a serializable transaction
-* [ ] roster locking mutation
-* [ ] server-side phase transition service
+* [x] roster locking mutation
+* [x] server-side phase transition service
 
 Frontend, in parallel:
 
 * [x] initial room lobby
 * [x] participant list
-* [ ] host controls
-* [ ] waiting/progress UI
-* [ ] **Partial:** join confirmation and share URL display are implemented; copy/share controls remain
+* [x] host controls
+* [x] waiting/progress UI
+* [x] join confirmation, share URL display, and copy/share controls
 
 Tests:
 
-* [ ] duplicate joining
-* [ ] capacity race
-* [ ] non-owner host actions
-* [ ] locked roster behavior
+* [x] duplicate joining
+* [x] capacity race
+* [x] non-owner host actions
+* [x] locked roster behavior
 
-**Milestone pending:** a stable participant roster can progress through room states correctly.
+**Milestone achieved:** a stable participant roster can progress through room states correctly.
 
 ---
 
