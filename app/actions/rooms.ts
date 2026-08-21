@@ -3,8 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { createRoom, joinRoom, lockRoster } from "@/lib/domain/rooms";
-import { roomHomePath, roomSelectionPath, roomVotingPath } from "@/lib/domain/room-paths";
+import { createRoom, joinRoom, lockRoster, updateFinalistOrdering } from "@/lib/domain/rooms";
+import { isFinalistOrdering, parseFinalistOrdering } from "@/lib/domain/finalist-ordering";
+import {
+  roomFinalizePath,
+  roomHomePath,
+  roomSelectionPath,
+  roomVotingPath,
+} from "@/lib/domain/room-paths";
 import { normalizeRoomCode, readString } from "@/lib/validation/shared";
 import type { ActionState } from "@/app/actions/types";
 
@@ -18,6 +24,14 @@ function readDate(value: FormDataEntryValue | null) {
   if (!text) return null;
   const date = new Date(text);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function revalidateRoom(code: string) {
+  revalidatePath(roomHomePath(code));
+  revalidatePath(roomSelectionPath(code));
+  revalidatePath(roomVotingPath(code));
+  revalidatePath(roomFinalizePath(code));
+  revalidatePath("/dashboard");
 }
 
 export async function createRoomAction(
@@ -50,6 +64,9 @@ export async function createRoomAction(
       maxParticipants,
       selectionsPerUser,
       requireParticipantCoverage: formData.get("requireParticipantCoverage") === "on",
+      finalistOrdering: parseFinalistOrdering(
+        readString(formData.get("finalistOrdering")),
+      ),
       joinDeadline: readDate(formData.get("joinDeadline")),
       selectionDeadline: readDate(formData.get("selectionDeadline")),
       votingDeadline: readDate(formData.get("votingDeadline")),
@@ -102,10 +119,7 @@ export async function lockRoomRosterAction(
     const user = await requireUser();
     const result = await lockRoster({ userId: user.id, code });
 
-    revalidatePath(roomHomePath(code));
-    revalidatePath(roomSelectionPath(code));
-    revalidatePath(roomVotingPath(code));
-    revalidatePath("/dashboard");
+    revalidateRoom(code);
 
     return {
       status: "success",
@@ -118,6 +132,46 @@ export async function lockRoomRosterAction(
       status: "error",
       message:
         error instanceof Error ? error.message : "Unable to lock the roster.",
+    };
+  }
+}
+
+export async function updateFinalistOrderingAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+  const orderingValue = readString(formData.get("finalistOrdering"));
+
+  if (!code) {
+    return { status: "error", message: "Enter a valid six-character room code." };
+  }
+
+  if (!isFinalistOrdering(orderingValue)) {
+    return { status: "error", message: "Choose a valid reveal order." };
+  }
+
+  try {
+    const user = await requireUser();
+    const result = await updateFinalistOrdering({
+      userId: user.id,
+      code,
+      ordering: orderingValue,
+    });
+
+    revalidateRoom(code);
+
+    return {
+      status: "success",
+      message: result.unchanged
+        ? "Reveal order is already set to that option."
+        : "Reveal order updated.",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error ? error.message : "Unable to update the reveal order.",
     };
   }
 }

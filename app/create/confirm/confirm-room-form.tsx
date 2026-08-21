@@ -7,6 +7,7 @@ import { initialActionState } from "@/app/actions/types";
 import { ActionMessage } from "@/app/components/action-message";
 import { SubmitButton } from "@/app/components/submit-button";
 import { roomDraftStorageKey, type RoomDraft } from "@/app/create/create-room-form";
+import { finalistOrderingLabel, parseFinalistOrdering } from "@/lib/domain/finalist-ordering";
 
 function isRoomDraft(value: unknown): value is RoomDraft {
   if (!value || typeof value !== "object") return false;
@@ -62,6 +63,10 @@ export function ConfirmRoomForm() {
           <div><dt>Guests</dt><dd>Up to {draft.maxParticipants}</dd></div>
           <div><dt>Selections</dt><dd>{draft.selectionsPerUser} each</dd></div>
           <div><dt>Coverage rule</dt><dd>{draft.requireParticipantCoverage ? "Required" : "Optional"}</dd></div>
+          <div>
+            <dt>Reveal order</dt>
+            <dd>{finalistOrderingLabel(parseFinalistOrdering(draft.finalistOrdering))}</dd>
+          </div>
         </dl>
       </div>
       <ActionMessage status={state.status} message={state.message} />

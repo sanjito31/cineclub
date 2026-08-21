@@ -61,5 +61,6 @@ test("dashboard separates hosted, joined, and completed rooms", () => {
 test("room task paths keep selection and voting off the lobby", () => {
   assert.equal(roomTaskPath("ABC234", RoomPhase.SELECTION), "/rooms/ABC234/select");
   assert.equal(roomTaskPath("ABC234", RoomPhase.VOTING), "/rooms/ABC234/vote");
+  assert.equal(roomTaskPath("ABC234", RoomPhase.FINALIZING), "/rooms/ABC234/finalize");
   assert.equal(roomTaskPath("ABC234", RoomPhase.REVEAL), roomHomePath("ABC234"));
 });

@@ -53,6 +53,7 @@ export async function getRoomForMember(code: string, userId: string) {
       maxParticipants: true,
       selectionsPerUser: true,
       requireParticipantCoverage: true,
+      finalistOrdering: true,
       rosterLockedAt: true,
       participants: {
         orderBy: { joinedAt: "asc" },

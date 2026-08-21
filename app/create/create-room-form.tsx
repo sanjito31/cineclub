@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { type FormEvent } from "react";
+import {
+  DEFAULT_FINALIST_ORDERING,
+  listFinalistOrderingStrategies,
+  parseFinalistOrdering,
+} from "@/lib/domain/finalist-ordering";
 
 export const roomDraftStorageKey = "cineclub:create-room-draft";
 
@@ -10,6 +15,7 @@ export type RoomDraft = {
   maxParticipants: string;
   selectionsPerUser: string;
   requireParticipantCoverage: boolean;
+  finalistOrdering: string;
   joinDeadline: string;
   selectionDeadline: string;
   votingDeadline: string;
@@ -17,6 +23,7 @@ export type RoomDraft = {
 
 export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }) {
   const router = useRouter();
+  const orderingStrategies = listFinalistOrderingStrategies();
 
   function toIsoDate(value: FormDataEntryValue | null) {
     const text = String(value ?? "");
@@ -31,6 +38,7 @@ export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }
       maxParticipants: String(data.get("maxParticipants") ?? "8"),
       selectionsPerUser: String(data.get("selectionsPerUser") ?? "3"),
       requireParticipantCoverage: data.get("requireParticipantCoverage") === "on",
+      finalistOrdering: parseFinalistOrdering(String(data.get("finalistOrdering") ?? "")),
       joinDeadline: toIsoDate(data.get("joinDeadline")),
       selectionDeadline: toIsoDate(data.get("selectionDeadline")),
       votingDeadline: toIsoDate(data.get("votingDeadline")),
@@ -61,6 +69,24 @@ export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }
           <small>Voters must include at least one nomination connected to each participant.</small>
         </span>
       </label>
+      <fieldset className="choice-fields field-span">
+        <legend>Reveal order</legend>
+        <p>Choose how the finalists are ordered after voting. You can change this later from host controls.</p>
+        {orderingStrategies.map((strategy) => (
+          <label className="check-field" key={strategy.id}>
+            <input
+              name="finalistOrdering"
+              type="radio"
+              value={strategy.id}
+              defaultChecked={strategy.id === DEFAULT_FINALIST_ORDERING}
+            />
+            <span>
+              <strong>{strategy.label}</strong>
+              <small>{strategy.description}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <fieldset className="deadline-fields field-span">
         <legend>Optional decision points</legend>
         <p>Deadlines won’t automatically remove anyone. The host can extend them later.</p>

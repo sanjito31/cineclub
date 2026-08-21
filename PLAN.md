@@ -8,19 +8,20 @@ The source design establishes four user-facing phases—onboarding, selection, v
 
 ## Current implementation status
 
-Updated August 20, 2026.
+Updated August 21, 2026.
 
 * **Chunk 1 is complete.** Prisma is connected to Supabase PostgreSQL, the schema is migrated, Supabase SSR authentication and profiles are implemented, and authenticated users can create or join an empty room.
 * **Chunk 2 is complete.** Room creation, short codes, joining, capacity checks, roster locking, host controls, progress UI, and server-side phase transitions are implemented and covered by concurrency and authorization tests.
 * **Chunk 3 is mostly complete.** Participants can search TMDB through a server-owned endpoint, submit atomic nominations before the roster is locked, and automatically advance the room to voting once the roster is locked and everyone has submitted. Same-user duplicate selections are rejected; cross-participant duplicates remain anonymous warnings and share one `room_movie`. The “someone already watched this” warning is **not done** and is deferred.
-* **Chunk 4 is complete.** Participants rank nominated movies on `/rooms/[code]/vote` with grouped coverage when the room requires it, Letterboxd movie cards, TMDB overviews on nomination groups, and an immutable ballot. The last ballot advances VOTING → FINALIZING. Coverage uses the same `min(P, M)` ranking floor and every-participant coverage math on the client and server. There is no FINALIZING page yet (Chunk 5), so a refresh after the last ballot leaves `/vote` for the lobby.
+* **Chunk 4 is complete.** Participants rank nominated movies on `/rooms/[code]/vote` with grouped coverage when the room requires it, Letterboxd movie cards, TMDB overviews on nomination groups, and an immutable ballot. The last ballot advances VOTING → FINALIZING. Coverage uses the same `min(P, M)` ranking floor and every-participant coverage math on the client and server. After the last ballot, `/vote` redirects to `/rooms/[code]/finalize`.
+* **Chunk 5 is complete.** Finalization is a pure Borda engine with Letterboxd then persisted-random tie-breaks, nominator-coverage finalist selection, and an extensible host-controlled `orderFinalists` strategy (`RANKED_CHOICE` or `RANDOM`). Missing ratings are requested from Watchboxd, pending jobs return `202`, and the immutable `room_movie_results` write is idempotent. The last ready attempt moves FINALIZING → REVEAL. Reveal UI is still Chunk 6, so a ready finalize lands on the lobby.
 * Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
 * The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
 * Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
 * Watchboxd watchlist, watched-history, overlap, movie, and job methods share reusable `200`/`202`/`404`/unavailable handling and bounded polling. HTTP `200` with `data: null` and `meta.jobs` is treated as pending, the same as `202`. Selection search returns TMDB snapshots and TMDB ratings immediately, plus a Letterboxd rating when Watchboxd is ready or a pending job id when it is not. The browser polls Cineclub rating and overlap endpoints and silently fills Letterboxd ratings and overlap suggestions without blocking search or nomination.
 * Selection lives on `/rooms/[code]/select`, separate from the lobby. Search results paginate five at a time, open TMDB in a new tab, and show poster, title, year, TMDB rating, and Letterboxd rating. Ratings use logo pills (TMDB blue, Letterboxd green, translucent fills, lighter outlines, white scores). Overlap suggestions sit below the slots: top 10 shared watchlist films with poster, title, year, and Letterboxd rating, linking to Letterboxd.
 * Voting lives on `/rooms/[code]/vote`. When coverage is on, nominations are grouped by person; select at least one film per person (extras allowed); a green check marks a covered group; selecting a shared `roomMovieId` once covers all its nominators; the rank list appears only after coverage. When coverage is off, movies move from an unranked pool into the ranked list. Both modes still require `min(P, M)` ranks plus an irreversible checkbox. Native drag reorder plus up/down/remove. Every movie card is a whole-card Letterboxd link (new tab) with a Letterboxd rating pill; Rank/Select/Remove/Up/Down do not navigate. Per-person nomination cards show TMDB overviews fetched live from movie-details by `tmdbId` in `getVotingBallotContext` (Prisma `overview` is not selected on this path). Ranking cards are compact: poster, title/year, nominated-by, and the rating pill; they omit overviews. Nullable `room_movies.overview` exists from a later nomination persist (`20260820190000_add_room_movie_overview` applied), but the vote page does not depend on it.
-* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, silent Letterboxd rating fill, ballot rank validation, participant coverage, immutable and concurrent ballot submits, last-submitter finalizing transitions, ranking UI helpers, and voting UI. Lint, TypeScript, tests, and the production build pass.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, silent Letterboxd rating fill, ballot rank validation, participant coverage, immutable and concurrent ballot submits, last-submitter finalizing transitions, ranking UI helpers, voting UI, Borda aggregation, finalist coverage, host-controlled finalist ordering, pending-rating finalization, and idempotent result writes. Lint, TypeScript, tests, and the production build pass.
 
 ---
 
@@ -128,6 +129,7 @@ Do not store room membership here.
 | `max_participants`             | Capacity                            |
 | `selections_per_user`          | Number of available selection slots |
 | `require_participant_coverage` | Voting rule                         |
+| `finalist_ordering`            | Host-controlled reveal order        |
 | `roster_locked_at`             | Freezes membership                  |
 | `join_deadline`                | Nullable                            |
 | `selection_deadline`           | Nullable                            |
@@ -346,7 +348,7 @@ Define the spooky algorithm behind a simple interface:
 
 `orderFinalists(movies) -> ordered movie IDs`
 
-Until the real algorithm exists, preserving aggregate order can be the development implementation.
+The host chooses the strategy as a room control (`rooms.finalist_ordering`). Current options are `RANKED_CHOICE` (vote ranking, winner last) and `RANDOM` (persisted shuffle). Additional strategies can be registered later without changing aggregation or the finalization write.
 
 ---
 
@@ -569,22 +571,22 @@ Tests:
 
 ---
 
-## Chunk 5 — Finalization Engine
+## Chunk 5 — Finalization Engine — Complete
 
 Can be built in parallel with most Voting UI work.
 
-* Borda aggregation implementation
-* tie-breaking
-* duplicate/nominator coverage logic
-* finalist selection
-* Watchboxd pending-rating handling
-* spooky-ordering interface
-* immutable `room_movie_results` (**database schema and constraints are complete; finalization write is pending**)
-* idempotent finalization endpoint
+* [x] Borda aggregation implementation
+* [x] tie-breaking
+* [x] duplicate/nominator coverage logic
+* [x] finalist selection
+* [x] Watchboxd pending-rating handling
+* [x] spooky-ordering interface as a host-controlled, extensible strategy registry (`RANKED_CHOICE`, `RANDOM`)
+* [x] immutable `room_movie_results` write
+* [x] idempotent finalization endpoint
 
 Build this primarily as pure functions so the algorithm can be exhaustively unit-tested without the database.
 
-**Milestone:** the same set of ballots always produces the same persisted final result.
+**Milestone achieved:** the same set of ballots always produces the same persisted final result. Reveal presentation is Chunk 6.
 
 ---
 

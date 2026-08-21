@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import * as nodeModule from "node:module";
 import test from "node:test";
-import { RoomPhase } from "../app/generated/prisma/enums";
+import { FinalistOrdering, RoomPhase } from "../app/generated/prisma/enums";
 
 type ResolveContext = {
   parentURL?: string;
@@ -242,4 +242,51 @@ test("phase transitions require membership and are idempotent", async () => {
     fixture.recordedTransactionOptions().map(({ isolationLevel }) => isolationLevel),
     ["Serializable", "Serializable", "Serializable"],
   );
+});
+
+test("only the host can change finalist ordering before results exist", async () => {
+  const [fixture, roomService] = await modules;
+  fixture.seedRoom({
+    ownerId: "host",
+    maxParticipants: 4,
+    participantUserIds: ["host", "member"],
+  });
+
+  await assert.rejects(
+    roomService.updateFinalistOrdering({
+      userId: "member",
+      code: "ABC234",
+      ordering: FinalistOrdering.RANDOM,
+    }),
+    /only the room host/i,
+  );
+
+  const updated = await roomService.updateFinalistOrdering({
+    userId: "host",
+    code: "ABC234",
+    ordering: FinalistOrdering.RANDOM,
+  });
+
+  assert.equal(updated.unchanged, false);
+  assert.equal(updated.finalistOrdering, FinalistOrdering.RANDOM);
+  assert.equal(fixture.roomFinalistOrdering(), FinalistOrdering.RANDOM);
+});
+
+test("finalist ordering cannot change after results are persisted", async () => {
+  const [fixture, roomService] = await modules;
+  fixture.seedRoom({
+    ownerId: "host",
+    maxParticipants: 4,
+    resultCount: 3,
+  });
+
+  await assert.rejects(
+    roomService.updateFinalistOrdering({
+      userId: "host",
+      code: "ABC234",
+      ordering: FinalistOrdering.RANDOM,
+    }),
+    /locked after finalization/i,
+  );
+  assert.equal(fixture.roomFinalistOrdering(), FinalistOrdering.RANKED_CHOICE);
 });

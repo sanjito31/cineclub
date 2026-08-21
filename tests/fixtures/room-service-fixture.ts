@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { RoomPhase } from "../../app/generated/prisma/enums";
+import { FinalistOrdering, RoomPhase } from "../../app/generated/prisma/enums";
 
 type Participant = {
   id: string;
@@ -19,6 +19,7 @@ type Room = {
   rosterLockedAt: Date | null;
   joinDeadline: Date | null;
   finalizedAt: Date | null;
+  finalistOrdering: FinalistOrdering;
   participants: Participant[];
 };
 
@@ -33,6 +34,7 @@ type TransactionOptions = {
 
 const rooms = new Map<string, Room>();
 const profiles = new Map<string, Profile>();
+const resultCounts = new Map<string, number>();
 const transactionOptions: TransactionOptions[] = [];
 
 let nextParticipantId = 1;
@@ -54,6 +56,7 @@ function selectedRoom(code: string) {
     rosterLockedAt: room.rosterLockedAt,
     joinDeadline: room.joinDeadline,
     finalizedAt: room.finalizedAt,
+    finalistOrdering: room.finalistOrdering,
     participants: room.participants.map(
       ({ id, userId, selectionSubmittedAt, votingSubmittedAt }) => ({
         id,
@@ -86,6 +89,7 @@ const transactionClient = {
         rosterLockedAt?: Date;
         phase?: RoomPhase;
         finalizedAt?: Date;
+        finalistOrdering?: FinalistOrdering;
       };
     }) => {
       const room = query.where.code
@@ -108,6 +112,9 @@ const transactionClient = {
       }
       if (query.data.finalizedAt) {
         room.finalizedAt = query.data.finalizedAt;
+      }
+      if (query.data.finalistOrdering) {
+        room.finalistOrdering = query.data.finalistOrdering;
       }
 
       return selectedRoom(room.code);
@@ -180,7 +187,8 @@ const transactionClient = {
     count: async () => 0,
   },
   roomMovieResult: {
-    count: async () => 0,
+    count: async (query: { where: { roomId: string } }) =>
+      resultCounts.get(query.where.roomId) ?? 0,
   },
 };
 
@@ -216,6 +224,7 @@ export async function requireProfile(userId: string) {
 export function resetRoomServiceFixture() {
   rooms.clear();
   profiles.clear();
+  resultCounts.clear();
   transactionOptions.length = 0;
   nextParticipantId = 1;
   transactionTail = Promise.resolve();
@@ -239,6 +248,8 @@ export function seedRoom(input: {
   phase?: RoomPhase;
   rosterLockedAt?: Date | null;
   joinDeadline?: Date | null;
+  finalistOrdering?: FinalistOrdering;
+  resultCount?: number;
 }) {
   const id = input.id ?? "room-1";
   const code = input.code ?? "ABC234";
@@ -261,6 +272,7 @@ export function seedRoom(input: {
     rosterLockedAt: input.rosterLockedAt ?? null,
     joinDeadline: input.joinDeadline ?? null,
     finalizedAt: null,
+    finalistOrdering: input.finalistOrdering ?? FinalistOrdering.RANKED_CHOICE,
     participants: participantUserIds.map((userId) => ({
       id: `participant-${nextParticipantId++}`,
       roomId: id,
@@ -274,6 +286,10 @@ export function seedRoom(input: {
         : null,
     })),
   });
+
+  if (input.resultCount) {
+    resultCounts.set(id, input.resultCount);
+  }
 }
 
 export function roomParticipantUserIds(code = "ABC234") {
@@ -286,6 +302,10 @@ export function roomRosterLockedAt(code = "ABC234") {
 
 export function roomPhase(code = "ABC234") {
   return rooms.get(code)?.phase;
+}
+
+export function roomFinalistOrdering(code = "ABC234") {
+  return rooms.get(code)?.finalistOrdering;
 }
 
 export function recordedTransactionOptions() {

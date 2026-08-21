@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomInt } from "node:crypto";
 import { Prisma } from "@/app/generated/prisma/client";
-import { RoomPhase } from "@/app/generated/prisma/enums";
+import { FinalistOrdering, RoomPhase } from "@/app/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { AuthorizationError, DomainError } from "@/lib/auth/errors";
 import { requireProfile } from "@/lib/data/profiles";
@@ -32,6 +32,7 @@ export type CreateRoomInput = {
   maxParticipants: number;
   selectionsPerUser: number;
   requireParticipantCoverage: boolean;
+  finalistOrdering: FinalistOrdering;
   joinDeadline: Date | null;
   selectionDeadline: Date | null;
   votingDeadline: Date | null;
@@ -50,6 +51,7 @@ export async function createRoom(input: CreateRoomInput) {
           maxParticipants: input.maxParticipants,
           selectionsPerUser: input.selectionsPerUser,
           requireParticipantCoverage: input.requireParticipantCoverage,
+          finalistOrdering: input.finalistOrdering,
           joinDeadline: input.joinDeadline,
           selectionDeadline: input.selectionDeadline,
           votingDeadline: input.votingDeadline,
@@ -207,6 +209,76 @@ export async function lockRoster(input: {
       phase: transition?.phase ?? RoomPhase.SELECTION,
       alreadyLocked: false,
       phaseTransitioned: transition?.transitioned ?? false,
+    };
+  });
+}
+
+export async function updateFinalistOrdering(input: {
+  userId: string;
+  code: string;
+  ordering: FinalistOrdering;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        code: true,
+        ownerId: true,
+        phase: true,
+        finalistOrdering: true,
+        participants: {
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can change the reveal order.");
+    }
+
+    if (!room.participants.some((participant) => participant.userId === input.userId)) {
+      throw new AuthorizationError("You are not a member of this room.");
+    }
+
+    if (
+      room.phase === RoomPhase.REVEAL
+      || room.phase === RoomPhase.COMPLETE
+    ) {
+      throw new DomainError("Reveal order is locked after finalization.");
+    }
+
+    const resultCount = await tx.roomMovieResult.count({
+      where: { roomId: room.id },
+    });
+    if (resultCount > 0) {
+      throw new DomainError("Reveal order is locked after finalization.");
+    }
+
+    if (room.finalistOrdering === input.ordering) {
+      return {
+        roomId: room.id,
+        code: room.code,
+        finalistOrdering: room.finalistOrdering,
+        unchanged: true,
+      };
+    }
+
+    const updated = await tx.room.update({
+      where: { id: room.id },
+      data: { finalistOrdering: input.ordering },
+      select: { finalistOrdering: true },
+    });
+
+    return {
+      roomId: room.id,
+      code: room.code,
+      finalistOrdering: updated.finalistOrdering,
+      unchanged: false,
     };
   });
 }

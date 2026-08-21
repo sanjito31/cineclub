@@ -12,6 +12,7 @@ import {
   type BallotValidationErrorCode,
 } from "@/lib/domain/voting";
 import {
+  roomFinalizePath,
   roomHomePath,
   roomSelectionPath,
   roomVotingPath,
@@ -83,6 +84,7 @@ export async function submitBallotAction(
     revalidatePath(roomHomePath(code));
     revalidatePath(roomSelectionPath(code));
     revalidatePath(roomVotingPath(code));
+    revalidatePath(roomFinalizePath(code));
     revalidatePath("/dashboard");
 
     return {

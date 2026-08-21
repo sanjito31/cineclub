@@ -311,7 +311,6 @@ const transactionClient = {
         submittedAt?: Date;
         ranks?: {
           create: Array<{
-            roomId: string;
             roomMovieId: string;
             rank: number;
           }>;
@@ -357,7 +356,7 @@ const transactionClient = {
         );
 
         ballotRanks.set(rankKey(ballot.id, rank.roomMovieId), {
-          roomId: rank.roomId,
+          roomId: ballot.roomId,
           ballotId: ballot.id,
           roomMovieId: rank.roomMovieId,
           rank: rank.rank,

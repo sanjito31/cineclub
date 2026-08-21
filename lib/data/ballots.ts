@@ -330,7 +330,6 @@ export async function submitBallot(
           submittedAt,
           ranks: {
             create: ranks.map((rank) => ({
-              roomId: room.id,
               roomMovieId: rank.roomMovieId,
               rank: rank.rank,
             })),

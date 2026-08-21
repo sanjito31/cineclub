@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
-import { lockRoomRosterAction } from "@/app/actions/rooms";
+import { lockRoomRosterAction, updateFinalistOrderingAction } from "@/app/actions/rooms";
 import { ClearRoomDraft } from "@/app/rooms/[code]/clear-room-draft";
+import { HostOrderingControls } from "@/app/rooms/[code]/host-ordering-controls";
 import { HostRosterControls } from "@/app/rooms/[code]/host-roster-controls";
 import { loadMemberRoom } from "@/app/rooms/[code]/load-room";
 import { RoomProgress } from "@/app/rooms/[code]/room-progress";
 import { ShareControls } from "@/app/rooms/[code]/share-controls";
 import { RoomPhase } from "@/app/generated/prisma/enums";
 import { roomPhaseLabels } from "@/lib/domain/room-lifecycle";
+import { finalistOrderingLabel } from "@/lib/domain/finalist-ordering";
 import { roomHomePath, roomTaskPath } from "@/lib/domain/room-paths";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +33,9 @@ function taskCta(phase: RoomPhase, submitted: boolean) {
   }
   if (phase === RoomPhase.VOTING) {
     return submitted ? "View voting" : "Rank movies";
+  }
+  if (phase === RoomPhase.FINALIZING) {
+    return "Preparing results";
   }
   return null;
 }
@@ -126,6 +131,7 @@ export default async function RoomPage({
             <dl>
               <div><dt>Movies per person</dt><dd>{room.selectionsPerUser}</dd></div>
               <div><dt>Participant coverage</dt><dd>{room.requireParticipantCoverage ? "Required" : "Optional"}</dd></div>
+              <div><dt>Reveal order</dt><dd>{finalistOrderingLabel(room.finalistOrdering)}</dd></div>
               <div><dt>Roster</dt><dd>{room.rosterLockedAt ? "Locked" : "Open"}</dd></div>
             </dl>
             <p className="muted-copy">
@@ -149,6 +155,20 @@ export default async function RoomPage({
                 }
                 locked={rosterLocked}
                 lockRosterAction={lockRoomRosterAction}
+              />
+            </section>
+          ) : null}
+          {isOwner ? (
+            <section className="panel">
+              <HostOrderingControls
+                code={room.code}
+                currentOrdering={room.finalistOrdering}
+                disabledReason={
+                  room.phase === RoomPhase.REVEAL || room.phase === RoomPhase.COMPLETE
+                    ? "Reveal order is locked after finalization."
+                    : undefined
+                }
+                updateOrderingAction={updateFinalistOrderingAction}
               />
             </section>
           ) : null}

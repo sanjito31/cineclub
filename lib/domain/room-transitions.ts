@@ -122,9 +122,7 @@ async function getTransitionBlocker(
     tx.roomMovieResult.count({ where: { roomId: room.id } }),
   ]);
 
-  return movieCount > 0 && resultCount === movieCount
-    ? null
-    : "RESULTS_PENDING";
+  return resultCount === movieCount ? null : "RESULTS_PENDING";
 }
 
 /**

@@ -24,6 +24,14 @@ enum RoomPhase {
   @@schema("cineclub")
 }
 
+enum FinalistOrdering {
+  RANKED_CHOICE
+  RANDOM
+
+  @@map("finalist_ordering")
+  @@schema("cineclub")
+}
+
 model Profile {
   id                 String            @id(map: "profiles_pkey") @db.Uuid
   displayName        String            @map("display_name")
@@ -46,6 +54,7 @@ model Room {
   maxParticipants            Int               @map("max_participants") @db.SmallInt
   selectionsPerUser          Int               @map("selections_per_user") @db.SmallInt
   requireParticipantCoverage Boolean           @default(true) @map("require_participant_coverage")
+  finalistOrdering           FinalistOrdering  @default(RANKED_CHOICE) @map("finalist_ordering")
   rosterLockedAt             DateTime?         @map("roster_locked_at") @db.Timestamptz(6)
   joinDeadline               DateTime?         @map("join_deadline") @db.Timestamptz(6)
   selectionDeadline          DateTime?         @map("selection_deadline") @db.Timestamptz(6)

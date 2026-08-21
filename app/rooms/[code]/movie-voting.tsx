@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, type DragEvent } from "react";
 import { initialActionState } from "@/app/actions/types";
 import { ActionMessage } from "@/app/components/action-message";
@@ -28,6 +29,7 @@ import {
   type VotingMovie,
   type VotingNominator,
 } from "@/app/rooms/[code]/voting-contracts";
+import { roomFinalizePath } from "@/lib/domain/room-paths";
 
 function LetterboxdRatingPill({ rating }: { rating: number | null }) {
   if (rating === null) return null;
@@ -267,6 +269,7 @@ export function MovieVoting({
     submitBallotAction,
     initialActionState,
   );
+  const router = useRouter();
   const [rankedIds, setRankedIds] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const submitStarted = useRef(false);
@@ -274,6 +277,13 @@ export function MovieVoting({
   useEffect(() => {
     if (!pending && state.status !== "success") submitStarted.current = false;
   }, [pending, state.status]);
+
+  useEffect(() => {
+    if (state.status === "success" && state.result?.phaseTransitioned) {
+      router.replace(roomFinalizePath(code));
+      router.refresh();
+    }
+  }, [code, router, state.result?.phaseTransitioned, state.status]);
 
   const uniqueMovies = uniqueVotingMovies(movies);
   const rankedMovies = rankedMoviesForIds(uniqueMovies, rankedIds);
