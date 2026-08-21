@@ -49,6 +49,7 @@ export default async function RoomSelectionPage({
             searchEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/search`}
             watchboxdEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/watchboxd`}
             ratingsEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/ratings`}
+            letterboxdMoviesEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/letterboxd`}
             submitSelectionsAction={submitNominationsAction}
           />
         )}

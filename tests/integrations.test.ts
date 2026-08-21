@@ -20,6 +20,7 @@ import {
   decodeWatchboxdMovie,
   decodeWatchboxdOverlapPage,
   decodeWatchboxdWatchedPage,
+  decodeWatchboxdWatchlistPage,
 } from "../lib/watchboxd/decode";
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -443,6 +444,7 @@ test("Watchboxd client uses documented collection, overlap, and job routes", asy
   await client.overlap(["alice", "bob", "alice"], decodeItems);
   await client.job("job-123", decodeItems);
   await client.movie(550, decodeItems);
+  await client.movieByLetterboxdSlug("fight-club", decodeItems);
 
   assert.equal(requests[0]?.pathname, "/api/v1/users/alice/watchlist");
   assert.equal(requests[0]?.searchParams.get("cursor"), "next");
@@ -451,6 +453,7 @@ test("Watchboxd client uses documented collection, overlap, and job routes", asy
   assert.equal(requests[2]?.searchParams.get("users"), "alice,bob");
   assert.equal(requests[3]?.pathname, "/api/v1/jobs/job-123");
   assert.equal(requests[4]?.pathname, "/api/v1/movies/550");
+  assert.equal(requests[5]?.pathname, "/api/v1/movies/letterboxd/fight-club");
 });
 
 test("Watchboxd overlap validates unique username bounds", () => {
@@ -464,6 +467,10 @@ test("Watchboxd overlap validates unique username bounds", () => {
   );
   assert.throws(
     () => client.movie(0, () => null),
+    WatchboxdInputError,
+  );
+  assert.throws(
+    () => client.movieByLetterboxdSlug("bad slug", () => null),
     WatchboxdInputError,
   );
 });
@@ -535,6 +542,7 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
   assert.equal(watched?.items[0]?.year, 1999);
   assert.equal(watched?.items[1]?.letterboxdSlug, "pending-film");
   assert.equal(watched?.items[1]?.year, 2026);
+  assert.equal(watched?.enrichment ?? null, null);
 
   const overlap = decodeWatchboxdOverlapPage({
     data: {
@@ -554,6 +562,7 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
   });
   assert.equal(overlap?.films[0]?.tmdbId, 27205);
   assert.equal(overlap?.films[0]?.letterboxdRating, 4.24);
+  assert.equal(overlap?.enrichment ?? null, null);
 
   assert.deepEqual(
     decodeWatchboxdJob({
@@ -571,5 +580,50 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
       error: null,
     },
   );
+});
+
+test("watchlist pages stay ready while child movies are still enriching", async () => {
+  const body = {
+    data: {
+      user: { username: "alice", displayName: "Alice" },
+      items: [{
+        title: "Pending",
+        year: 2026,
+        letterboxdSlug: "pending-film",
+        posterUrl: "https://a.ltrbxd.com/poster.jpg",
+        tmdbId: null,
+      }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    },
+    meta: {
+      cache: "hit",
+      enrichment: {
+        complete: false,
+        pendingSlugs: ["pending-film"],
+        failedSlugs: [],
+      },
+    },
+  };
+
+  const decoded = decodeWatchboxdWatchlistPage(body);
+  assert.equal(decoded?.items.length, 1);
+  assert.equal(decoded?.items[0]?.tmdbId, null);
+  assert.equal(decoded?.items[0]?.letterboxdSlug, "pending-film");
+  assert.equal(decoded?.items[0]?.title, "Pending");
+  assert.deepEqual(decoded?.enrichment, {
+    complete: false,
+    pendingSlugs: ["pending-film"],
+    failedSlugs: [],
+  });
+
+  const result = await parseAsyncResourceResponse(
+    jsonResponse(body),
+    decodeWatchboxdWatchlistPage,
+  );
+  assert.equal(result.status, "ready");
+  if (result.status === "ready") {
+    assert.equal(result.data.enrichment?.complete, false);
+    assert.equal(result.data.items[0]?.tmdbId, null);
+  }
 });
 

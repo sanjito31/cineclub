@@ -29,6 +29,7 @@ export type WatchboxdClientConfig = {
 
 const usernamePattern = /^[A-Za-z0-9_-]{1,40}$/;
 const jobIdPattern = /^[A-Za-z0-9_-]{1,160}$/;
+const letterboxdSlugPattern = /^[A-Za-z0-9_-]{1,160}$/;
 
 function normalizeUsername(username: string) {
   const normalized = username.trim();
@@ -55,6 +56,14 @@ function normalizeTmdbId(tmdbId: number) {
     throw new WatchboxdInputError("Enter a valid TMDB movie ID.");
   }
   return tmdbId;
+}
+
+function normalizeLetterboxdSlug(slug: string) {
+  const normalized = slug.trim();
+  if (!letterboxdSlugPattern.test(normalized)) {
+    throw new WatchboxdInputError("Enter a valid Letterboxd movie slug.");
+  }
+  return normalized;
 }
 
 function createBaseUrl(value: string) {
@@ -157,6 +166,19 @@ export class WatchboxdClient {
     const normalized = normalizeTmdbId(tmdbId);
     return this.request(
       `/api/v1/movies/${encodeURIComponent(String(normalized))}`,
+      decode,
+      options,
+    );
+  }
+
+  movieByLetterboxdSlug<T>(
+    letterboxdSlug: string,
+    decode: WatchboxdDecoder<T>,
+    options?: WatchboxdRequestOptions,
+  ) {
+    const normalized = normalizeLetterboxdSlug(letterboxdSlug);
+    return this.request(
+      `/api/v1/movies/letterboxd/${encodeURIComponent(normalized)}`,
       decode,
       options,
     );

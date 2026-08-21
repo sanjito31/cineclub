@@ -16,12 +16,13 @@ import {
   createSelectionSlots,
   duplicateSelectionIds,
   moviePosterSrc,
+  overlapToSelectionMovie,
+  parseLetterboxdMovieLookupsResponse,
   parseMovieRatingsResponse,
   parseMovieSearchResponse,
   parseWatchboxdContextResponse,
   serializeSelectionSubmission,
   tmdbMovieUrl,
-  toSelectionMovie,
 } from "@/app/rooms/[code]/selection-contracts";
 import type {
   OverlapSuggestion,
@@ -33,7 +34,7 @@ import type {
   WatchedMember,
 } from "@/app/rooms/[code]/selection-contracts";
 import { pollAsyncResource } from "@/lib/integrations/async-resource";
-import { emptyWatchedIndex, watchedWarningCopy } from "@/lib/domain/watchboxd-selection";
+import { applyLetterboxdMovieLookupToSuggestion, emptyWatchedIndex, mergeOverlapSuggestion, watchedWarningCopy } from "@/lib/domain/watchboxd-selection";
 
 type SearchStatus = "idle" | "loading" | "success" | "empty" | "error";
 
@@ -290,25 +291,13 @@ function MovieDetails({
   );
 }
 
-function overlapToSelectionMovie(suggestion: OverlapSuggestion): SelectionMovie | null {
-  if (!suggestion.tmdbId) return null;
-  return toSelectionMovie({
-    tmdbId: suggestion.tmdbId,
-    title: suggestion.title,
-    releaseYear: suggestion.releaseYear,
-    posterUrl: suggestion.posterUrl,
-    letterboxdRating: suggestion.letterboxdRating,
-    letterboxdUrl: suggestion.letterboxdUrl,
-    letterboxdSlug: suggestion.letterboxdSlug,
-  });
-}
-
 export function MovieSelection({
   code,
   selectionsPerUser,
   searchEndpoint,
   watchboxdEndpoint,
   ratingsEndpoint,
+  letterboxdMoviesEndpoint,
   submitSelectionsAction,
   initialSelections = [],
   initialSuggestions = [],
@@ -318,6 +307,7 @@ export function MovieSelection({
   searchEndpoint: string;
   watchboxdEndpoint: string;
   ratingsEndpoint: string;
+  letterboxdMoviesEndpoint: string;
   submitSelectionsAction: SubmitSelectionsAction;
   initialSelections?: SelectionSlotValue[];
   initialSuggestions?: SelectionMovie[];
@@ -387,11 +377,17 @@ export function MovieSelection({
           } else if (parsed.status === "pending" && parsed.overlapStatus !== "ready") {
             overlapStatus = "pending";
           }
-          setOverlap({
+          setOverlap((current) => ({
             eligible: parsed.eligibleForOverlap,
             status: overlapStatus,
-            suggestions: parsed.suggestions,
-          });
+            suggestions: parsed.suggestions.map((suggestion) => {
+              const existing = current.suggestions.find((candidate) => (
+                (suggestion.letterboxdSlug && candidate.letterboxdSlug === suggestion.letterboxdSlug)
+                || candidate.letterboxdUrl === suggestion.letterboxdUrl
+              ));
+              return mergeOverlapSuggestion(suggestion, existing);
+            }),
+          }));
           setSlots((current) => current.map((slot) => ({
             ...slot,
             movie: slot.movie ? applyWatchedIndexToMovie(slot.movie, parsed.watched) : slot.movie,
@@ -489,6 +485,70 @@ export function MovieSelection({
 
     return () => controller.abort();
   }, [pendingRatingKey, ratingsEndpoint]);
+
+  const pendingOverlapSlugs = [
+    ...new Set(
+      overlap.suggestions.flatMap((suggestion) => (
+        !suggestion.tmdbId && suggestion.letterboxdMovieJobId && suggestion.letterboxdSlug
+          ? [suggestion.letterboxdSlug]
+          : []
+      )),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+  const pendingOverlapKey = pendingOverlapSlugs.join(",");
+
+  useEffect(() => {
+    if (!pendingOverlapKey) return;
+    const slugs = pendingOverlapKey.split(",");
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        let pendingSlugs = slugs;
+        for (let attempt = 0; attempt < 20 && pendingSlugs.length > 0; attempt += 1) {
+          const url = new URL(letterboxdMoviesEndpoint, window.location.origin);
+          url.searchParams.set("slugs", pendingSlugs.join(","));
+          const response = await fetch(url, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: controller.signal,
+          });
+          const body: unknown = await response.json().catch(() => null);
+          const lookups = parseLetterboxdMovieLookupsResponse(body);
+          if (!lookups) {
+            await wait(2_000, controller.signal);
+            continue;
+          }
+
+          const bySlug = new Map(
+            lookups.map((lookup) => [lookup.letterboxdSlug.toLowerCase(), lookup]),
+          );
+          setOverlap((current) => ({
+            ...current,
+            suggestions: current.suggestions.map((suggestion) => {
+              const lookup = suggestion.letterboxdSlug
+                ? bySlug.get(suggestion.letterboxdSlug.toLowerCase())
+                : undefined;
+              return lookup
+                ? applyLetterboxdMovieLookupToSuggestion(suggestion, lookup)
+                : suggestion;
+            }),
+          }));
+
+          pendingSlugs = lookups
+            .filter((lookup) => lookup.letterboxdMovieJobId && pendingSlugs.includes(lookup.letterboxdSlug))
+            .map((lookup) => lookup.letterboxdSlug);
+          if (pendingSlugs.length === 0) return;
+          await wait(2_000, controller.signal);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    })();
+
+    return () => controller.abort();
+  }, [letterboxdMoviesEndpoint, pendingOverlapKey]);
 
   const duplicates = duplicateSelectionIds(slots);
   const completedSlots = slots.filter((slot) => slot.movie !== null).length;

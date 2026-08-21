@@ -22,6 +22,12 @@ export type WatchboxdWatchedItem = {
   year: number | null;
 };
 
+export type WatchboxdEnrichment = {
+  complete: boolean;
+  pendingSlugs: string[];
+  failedSlugs: string[];
+};
+
 export type WatchboxdCollectionPage<T> = {
   user: WatchboxdListUser | null;
   items: T[];
@@ -31,6 +37,7 @@ export type WatchboxdCollectionPage<T> = {
     total: number;
     totalPages: number;
   };
+  enrichment?: WatchboxdEnrichment | null;
 };
 
 export type WatchboxdOverlapFilm = WatchboxdMovie & {
@@ -46,6 +53,7 @@ export type WatchboxdOverlapPage = {
     total: number;
     totalPages: number;
   };
+  enrichment?: WatchboxdEnrichment | null;
 };
 
 export type WatchboxdJob = {
@@ -120,13 +128,52 @@ export function decodeWatchboxdListUser(value: unknown): WatchboxdListUser | nul
   };
 }
 
+export function decodeWatchboxdEnrichment(value: unknown): WatchboxdEnrichment | null {
+  const record = asRecord(value);
+  const enrichment = asRecord(record?.enrichment) ?? record;
+  if (!enrichment) return null;
+
+  const pendingSlugs = stringList(enrichment.pendingSlugs);
+  const failedSlugs = stringList(enrichment.failedSlugs);
+  if (
+    enrichment.complete === undefined
+    && pendingSlugs.length === 0
+    && failedSlugs.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    complete: enrichment.complete === true,
+    pendingSlugs,
+    failedSlugs,
+  };
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+        const slug = optionalString(item);
+        return slug ? [slug] : [];
+      })
+    : [];
+}
+
+function envelopeMeta(value: unknown): Record<string, unknown> | null {
+  const body = asRecord(value);
+  return asRecord(body?.meta);
+}
+
 export function decodeWatchboxdMovie(value: unknown): WatchboxdMovie | null {
   const data = envelopeData(value) ?? asRecord(value);
-  const movie = asRecord(data?.movie) ?? data;
+  const movie = asRecord(data?.movie) ?? asRecord(data?.film) ?? data;
   if (!movie) return null;
 
-  const title = optionalString(movie.title);
-  const letterboxdSlug = optionalString(movie.letterboxdSlug) ?? optionalString(movie.sourceSlug);
+  const title = optionalString(movie.title) ?? optionalString(movie.sourceTitle);
+  const letterboxdSlug =
+    optionalString(movie.letterboxdSlug)
+    ?? optionalString(movie.sourceSlug)
+    ?? optionalString(movie.slug);
   const letterboxdUrl =
     optionalHttpsUrl(movie.letterboxdUrl) ?? letterboxdUrlFromSlug(letterboxdSlug);
   if (!title && !letterboxdSlug && !letterboxdUrl) return null;
@@ -138,7 +185,7 @@ export function decodeWatchboxdMovie(value: unknown): WatchboxdMovie | null {
     letterboxdRating: optionalRating(movie.letterboxdRating),
     letterboxdSlug,
     letterboxdUrl,
-    posterUrl: optionalHttpsUrl(movie.posterUrl),
+    posterUrl: optionalHttpsUrl(movie.posterUrl) ?? optionalHttpsUrl(movie.sourcePosterUrl),
     resolutionStatus: optionalString(movie.resolutionStatus),
   };
 }
@@ -206,7 +253,14 @@ export function decodeWatchboxdWatchedPage(
       return decoded ? [decoded] : [];
     }),
     pagination: decodePagination(data.pagination, data.items.length),
+    enrichment: decodeWatchboxdEnrichment(envelopeMeta(value)),
   };
+}
+
+export function decodeWatchboxdWatchlistPage(
+  value: unknown,
+): WatchboxdCollectionPage<WatchboxdWatchedItem> | null {
+  return decodeWatchboxdWatchedPage(value);
 }
 
 export function decodeWatchboxdOverlapFilm(value: unknown): WatchboxdOverlapFilm | null {
@@ -242,6 +296,7 @@ export function decodeWatchboxdOverlapPage(value: unknown): WatchboxdOverlapPage
       return decoded ? [decoded] : [];
     }),
     pagination: decodePagination(data.pagination, data.films.length),
+    enrichment: decodeWatchboxdEnrichment(envelopeMeta(value)),
   };
 }
 

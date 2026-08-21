@@ -70,6 +70,14 @@ export function getWatchboxdMovie<T>(
   return createClient().movie(tmdbId, decode, options);
 }
 
+export function getWatchboxdMovieByLetterboxdSlug<T>(
+  letterboxdSlug: string,
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().movieByLetterboxdSlug(letterboxdSlug, decode, options);
+}
+
 export function getWatchboxdWatchlist<T>(
   username: string,
   decode: WatchboxdDecoder<T>,

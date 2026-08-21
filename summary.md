@@ -100,9 +100,13 @@ Letterboxd has no public API. Requests use the versioned API, which reads
 persistent snapshots from Supabase Postgres. Cache misses and stale resources
 create idempotent `ScrapeJob` rows and publish a minimal message to the
 `scrape-jobs-v1` Vercel Queue topic. The private Node.js consumer scrapes
-Letterboxd, enriches movies through TMDB, and atomically replaces each
-snapshot. The browser follows `202 Accepted` job descriptors and computes no
-overlap locally.
+Letterboxd. List workers atomically save lightweight movies, ordered
+relationships, and deduplicated child movie jobs. Movie workers then scrape
+only the Letterboxd film page for its title, year, film ID, outbound TMDB ID,
+primary poster, and rating. TMDB is never requested by this application; API
+consumers can use the returned `tmdbId` directly if they need other metadata.
+The browser follows `202 Accepted` job descriptors and computes no overlap
+locally.
 
 | Route | Purpose |
 |-------|---------|
@@ -110,11 +114,18 @@ overlap locally.
 | `GET /api/v1/users/{username}/watchlist` | Paginated watchlist |
 | `GET /api/v1/users/{username}/watched` | Paginated deduplicated watched titles |
 | `GET /api/v1/users/{username}/network` | Mutual and following network |
-| `GET /api/v1/movies/{tmdbId}` | Match a TMDB movie to Letterboxd, then return metadata, rating, and poster fallbacks |
-| `GET /api/v1/movies/letterboxd/{letterboxdSlug}` | Fallback movie lookup by Letterboxd slug |
+| `GET /api/v1/movies/{tmdbId}` | Follow Letterboxd's `/tmdb/{id}/` redirect and return Letterboxd movie data |
+| `GET /api/v1/movies/letterboxd/{letterboxdSlug}` | Movie lookup by Letterboxd slug or known alias |
 | `GET /api/v1/overlap?users=a,b` | Server-computed paginated overlap |
 | `GET /api/v1/jobs/{jobId}` | Pollable background-job status |
 
-Fresh responses return `200`; misses return `202` with `Location` and
-`Retry-After`; stale snapshots return immediately with a refresh job.
+Fresh responses return `200`; cache misses return `202` with `Location` and
+`Retry-After`; stale data returns immediately with deduplicated `refreshJobs`.
+Once a watchlist or watched snapshot exists, its paginated
+response returns provisional title, year, slug, and poster data without waiting
+for child movie jobs. Page-scoped `meta.enrichment` reports `complete`,
+`pendingSlugs`, and `failedSlugs`. Failed enrichment remains visible in these
+two lists; overlap continues to require resolved page movies and omits failed
+ones. List responses do not create or inspect per-movie jobs; individual movie
+routes handle movie freshness and recovery.
 

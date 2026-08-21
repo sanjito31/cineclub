@@ -5,6 +5,7 @@ import {
   applyWatchedIndexToMovie,
   createSelectionSlots,
   duplicateSelectionIds,
+  overlapToSelectionMovie,
   parseMovieSearchResponse,
   serializeSelectionSubmission,
   tmdbMovieUrl,
@@ -13,8 +14,12 @@ import {
 } from "../app/rooms/[code]/selection-contracts";
 import {
   addWatchedPageToIndex,
+  applyLetterboxdMovieLookupToSuggestion,
+  applyTmdbDetailsToOverlapSuggestion,
   emptyWatchedIndex,
   limitOverlapSuggestions,
+  mergeOverlapSuggestion,
+  watchboxdMovieNeedsResolution,
   watchedMembersForMovie,
   watchedWarningCopy,
 } from "../lib/domain/watchboxd-selection";
@@ -281,6 +286,88 @@ test("overlap suggestions keep the top 10 Letterboxd-linked films", () => {
     ["Film 1", "Film 3", "Film 4", "Film 5", "Film 6", "Film 7", "Film 8", "Film 9", "Film 10", "Film 11"],
   );
   assert.equal(suggestions[0]?.letterboxdUrl, "https://letterboxd.com/film/film-1/");
+  assert.equal(suggestions[0]?.overview, null);
+  assert.equal(suggestions[0]?.letterboxdMovieJobId, null);
+});
+
+test("pending overlap films stay visible and hydrate TMDB metadata after slug lookup", () => {
+  const pendingFilm = {
+    tmdbId: null,
+    title: "Pending",
+    year: 2026,
+    letterboxdRating: null,
+    letterboxdSlug: "pending-film",
+    letterboxdUrl: "https://letterboxd.com/film/pending-film/",
+    posterUrl: "https://a.ltrbxd.com/poster.jpg",
+    resolutionStatus: null,
+    overlapCount: 2,
+  };
+  const failedFilm = {
+    ...pendingFilm,
+    title: "Failed",
+    letterboxdSlug: "failed-film",
+    letterboxdUrl: "https://letterboxd.com/film/failed-film/",
+    resolutionStatus: "failed",
+  };
+
+  const suggestions = limitOverlapSuggestions([failedFilm, pendingFilm]);
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0]?.title, "Pending");
+  assert.equal(suggestions[0]?.tmdbId, null);
+  assert.equal(overlapToSelectionMovie(suggestions[0]!), null);
+  assert.equal(watchboxdMovieNeedsResolution(suggestions[0]!), true);
+
+  const pendingLookup = applyLetterboxdMovieLookupToSuggestion(suggestions[0]!, {
+    letterboxdSlug: "pending-film",
+    tmdbId: null,
+    title: null,
+    year: null,
+    letterboxdRating: null,
+    letterboxdUrl: null,
+    posterUrl: null,
+    letterboxdMovieJobId: "job-pending",
+    overview: null,
+    tmdbRating: null,
+    posterPath: null,
+  });
+  assert.equal(pendingLookup.letterboxdMovieJobId, "job-pending");
+  assert.equal(pendingLookup.tmdbId, null);
+
+  const resolved = applyLetterboxdMovieLookupToSuggestion(pendingLookup, {
+    letterboxdSlug: "pending-film",
+    tmdbId: 550,
+    title: "Pending",
+    year: 2026,
+    letterboxdRating: 3.8,
+    letterboxdUrl: "https://letterboxd.com/film/pending-film/",
+    posterUrl: "https://a.ltrbxd.com/poster.jpg",
+    letterboxdMovieJobId: null,
+    overview: "A TMDB description.",
+    tmdbRating: 7.4,
+    posterPath: "/poster.jpg",
+  });
+  assert.equal(resolved.tmdbId, 550);
+  assert.equal(resolved.overview, "A TMDB description.");
+  assert.equal(resolved.tmdbRating, 7.4);
+  assert.equal(resolved.letterboxdMovieJobId, null);
+
+  const selectable = overlapToSelectionMovie(resolved);
+  assert.equal(selectable?.tmdbId, 550);
+  assert.equal(selectable?.overview, "A TMDB description.");
+  assert.equal(selectable?.tmdbRating, 7.4);
+  assert.equal(selectable?.posterPath, "/poster.jpg");
+  assert.equal(selectable?.posterUrl, "https://a.ltrbxd.com/poster.jpg");
+
+  const merged = mergeOverlapSuggestion(
+    suggestions[0]!,
+    applyTmdbDetailsToOverlapSuggestion(resolved, {
+      overview: "Kept from the earlier hydrate.",
+      voteAverage: 8.1,
+      posterPath: "/kept.jpg",
+    }),
+  );
+  assert.equal(merged.tmdbId, 550);
+  assert.equal(merged.overview, "Kept from the earlier hydrate.");
 });
 
 test("pending Letterboxd ratings silently fill once Watchboxd is ready", () => {

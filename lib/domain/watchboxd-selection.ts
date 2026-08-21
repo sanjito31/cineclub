@@ -33,10 +33,122 @@ export type OverlapSuggestion = {
   title: string;
   releaseYear: number | null;
   posterUrl: string | null;
+  posterPath: string | null;
+  overview: string | null;
+  tmdbRating: number | null;
   letterboxdRating: number | null;
   letterboxdUrl: string;
   letterboxdSlug: string | null;
+  letterboxdMovieJobId: string | null;
 };
+
+export type TmdbMovieSnapshot = {
+  overview: string | null;
+  voteAverage: number | null;
+  posterPath: string | null;
+};
+
+export type LetterboxdMovieLookup = {
+  letterboxdSlug: string;
+  tmdbId: number | null;
+  title: string | null;
+  year: number | null;
+  letterboxdRating: number | null;
+  letterboxdUrl: string | null;
+  posterUrl: string | null;
+  letterboxdMovieJobId: string | null;
+  overview: string | null;
+  tmdbRating: number | null;
+  posterPath: string | null;
+};
+
+export function watchboxdMovieNeedsResolution(movie: {
+  tmdbId: number | null;
+  letterboxdSlug?: string | null;
+  resolutionStatus?: string | null;
+}) {
+  if (movie.tmdbId != null || !movie.letterboxdSlug) return false;
+  const status = movie.resolutionStatus?.trim().toLowerCase();
+  return status !== "failed";
+}
+
+export function overlapSuggestionFromFilm(
+  film: WatchboxdOverlapFilm,
+): OverlapSuggestion | null {
+  if (!film.letterboxdUrl) return null;
+  const status = film.resolutionStatus?.trim().toLowerCase();
+  if (status === "failed") return null;
+
+  return {
+    tmdbId: film.tmdbId,
+    title: film.title,
+    releaseYear: film.year,
+    posterUrl: film.posterUrl,
+    posterPath: null,
+    overview: null,
+    tmdbRating: null,
+    letterboxdRating: film.letterboxdRating,
+    letterboxdUrl: film.letterboxdUrl,
+    letterboxdSlug: film.letterboxdSlug,
+    letterboxdMovieJobId: null,
+  };
+}
+
+export function applyTmdbDetailsToOverlapSuggestion(
+  suggestion: OverlapSuggestion,
+  tmdb: TmdbMovieSnapshot | null | undefined,
+): OverlapSuggestion {
+  if (!tmdb) return suggestion;
+  return {
+    ...suggestion,
+    overview: tmdb.overview ?? suggestion.overview,
+    tmdbRating: tmdb.voteAverage ?? suggestion.tmdbRating,
+    posterPath: tmdb.posterPath ?? suggestion.posterPath,
+  };
+}
+
+export function applyLetterboxdMovieLookupToSuggestion(
+  suggestion: OverlapSuggestion,
+  lookup: LetterboxdMovieLookup,
+): OverlapSuggestion {
+  const suggestionSlug = suggestion.letterboxdSlug?.toLowerCase() ?? null;
+  const lookupSlug = lookup.letterboxdSlug.toLowerCase();
+  if (!suggestionSlug || suggestionSlug !== lookupSlug) return suggestion;
+
+  const pending = Boolean(lookup.letterboxdMovieJobId);
+  return {
+    ...suggestion,
+    tmdbId: lookup.tmdbId ?? suggestion.tmdbId,
+    title: lookup.title?.trim() || suggestion.title,
+    releaseYear: lookup.year ?? suggestion.releaseYear,
+    posterUrl: lookup.posterUrl ?? suggestion.posterUrl,
+    posterPath: lookup.posterPath ?? suggestion.posterPath,
+    overview: pending ? suggestion.overview : lookup.overview ?? suggestion.overview,
+    tmdbRating: pending ? suggestion.tmdbRating : lookup.tmdbRating ?? suggestion.tmdbRating,
+    letterboxdRating: pending ? suggestion.letterboxdRating : lookup.letterboxdRating ?? suggestion.letterboxdRating,
+    letterboxdUrl: lookup.letterboxdUrl ?? suggestion.letterboxdUrl,
+    letterboxdSlug: lookup.letterboxdSlug || suggestion.letterboxdSlug,
+    letterboxdMovieJobId: lookup.letterboxdMovieJobId,
+  };
+}
+
+export function mergeOverlapSuggestion(
+  incoming: OverlapSuggestion,
+  existing: OverlapSuggestion | undefined,
+): OverlapSuggestion {
+  if (!existing) return incoming;
+  const tmdbId = incoming.tmdbId ?? existing.tmdbId;
+  return {
+    ...incoming,
+    tmdbId,
+    posterUrl: incoming.posterUrl ?? existing.posterUrl,
+    posterPath: incoming.posterPath ?? existing.posterPath,
+    overview: incoming.overview ?? existing.overview,
+    tmdbRating: incoming.tmdbRating ?? existing.tmdbRating,
+    letterboxdRating: incoming.letterboxdRating ?? existing.letterboxdRating,
+    letterboxdMovieJobId: tmdbId ? null : incoming.letterboxdMovieJobId ?? existing.letterboxdMovieJobId,
+  };
+}
 
 export function letterboxdUsernameForParticipant(participant: {
   letterboxdUsernameSnapshot?: string | null;
@@ -187,16 +299,10 @@ export function limitOverlapSuggestions(
   const suggestions: OverlapSuggestion[] = [];
 
   for (const film of films) {
-    if (!film.letterboxdUrl || suggestions.length >= limit) continue;
-    suggestions.push({
-      tmdbId: film.tmdbId,
-      title: film.title,
-      releaseYear: film.year,
-      posterUrl: film.posterUrl,
-      letterboxdRating: film.letterboxdRating,
-      letterboxdUrl: film.letterboxdUrl,
-      letterboxdSlug: film.letterboxdSlug,
-    });
+    if (suggestions.length >= limit) break;
+    const suggestion = overlapSuggestionFromFilm(film);
+    if (!suggestion) continue;
+    suggestions.push(suggestion);
   }
 
   return suggestions;

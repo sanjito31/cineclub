@@ -250,11 +250,13 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     ? null
     : Number(film.releaseYear);
   const letterboxdRating = optionalRating(film.letterboxdRating, 5);
+  const tmdbRating = optionalRating(film.tmdbRating, 10);
 
   if (
     !title
     || !letterboxdUrl
     || letterboxdRating === undefined
+    || tmdbRating === undefined
     || (tmdbId !== null && (!Number.isSafeInteger(tmdbId) || tmdbId <= 0))
     || (releaseYear !== null && (!Number.isInteger(releaseYear) || releaseYear < 1888))
   ) {
@@ -266,9 +268,13 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     title,
     releaseYear,
     posterUrl: optionalHttpsUrl(film.posterUrl),
+    posterPath: optionalString(film.posterPath),
+    overview: optionalString(film.overview),
+    tmdbRating,
     letterboxdRating,
     letterboxdUrl,
     letterboxdSlug: optionalString(film.letterboxdSlug),
+    letterboxdMovieJobId: optionalString(film.letterboxdMovieJobId),
   };
 }
 
@@ -350,6 +356,48 @@ export function parseMovieRatingsResponse(value: unknown) {
   });
 }
 
+export function parseLetterboxdMovieLookupsResponse(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const movies = (value as { movies?: unknown }).movies;
+  if (!Array.isArray(movies)) return null;
+
+  return movies.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const movie = entry as Record<string, unknown>;
+    const letterboxdSlug = optionalString(movie.letterboxdSlug);
+    if (!letterboxdSlug) return [];
+
+    const tmdbId = movie.tmdbId === null || movie.tmdbId === undefined ? null : Number(movie.tmdbId);
+    const year = movie.year === null || movie.year === undefined
+      ? null
+      : Number(movie.year);
+    const letterboxdRating = optionalRating(movie.letterboxdRating, 5);
+    const tmdbRating = optionalRating(movie.tmdbRating, 10);
+    if (
+      letterboxdRating === undefined
+      || tmdbRating === undefined
+      || (tmdbId !== null && (!Number.isSafeInteger(tmdbId) || tmdbId <= 0))
+      || (year !== null && (!Number.isInteger(year) || year < 1888))
+    ) {
+      return [];
+    }
+
+    return [{
+      letterboxdSlug,
+      tmdbId,
+      title: optionalString(movie.title),
+      year,
+      letterboxdRating,
+      letterboxdUrl: optionalHttpsUrl(movie.letterboxdUrl),
+      posterUrl: optionalHttpsUrl(movie.posterUrl),
+      letterboxdMovieJobId: optionalString(movie.letterboxdMovieJobId),
+      overview: optionalString(movie.overview),
+      tmdbRating,
+      posterPath: optionalString(movie.posterPath),
+    }];
+  });
+}
+
 export function applyWatchedIndexToMovie(movie: SelectionMovie, index: WatchedIndex): SelectionMovie {
   const watchedByMembers = watchedMembersForMovie(index, {
     tmdbId: movie.tmdbId,
@@ -375,6 +423,22 @@ export function applyRatingLookupToMovie(
   },
 ): SelectionMovie {
   return applyLetterboxdRating(movie, update);
+}
+
+export function overlapToSelectionMovie(suggestion: OverlapSuggestion): SelectionMovie | null {
+  if (!suggestion.tmdbId) return null;
+  return toSelectionMovie({
+    tmdbId: suggestion.tmdbId,
+    title: suggestion.title,
+    releaseYear: suggestion.releaseYear,
+    overview: suggestion.overview,
+    posterPath: suggestion.posterPath,
+    posterUrl: suggestion.posterUrl,
+    tmdbRating: suggestion.tmdbRating,
+    letterboxdRating: suggestion.letterboxdRating,
+    letterboxdUrl: suggestion.letterboxdUrl,
+    letterboxdSlug: suggestion.letterboxdSlug,
+  });
 }
 
 export function createSelectionSlots(count: number): SelectionSlotValue[] {

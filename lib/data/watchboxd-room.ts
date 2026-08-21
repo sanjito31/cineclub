@@ -2,15 +2,20 @@ import "server-only";
 
 import {
   addWatchedPageToIndex,
+  applyLetterboxdMovieLookupToSuggestion,
+  applyTmdbDetailsToOverlapSuggestion,
   collectRoomLetterboxdMembers,
   emptyWatchedIndex,
   limitOverlapSuggestions,
   MAXIMUM_WATCHED_PAGES,
+  watchboxdMovieNeedsResolution,
   WATCHED_PAGE_SIZE,
+  type LetterboxdMovieLookup,
   type OverlapSuggestion,
   type WatchedIndex,
   type WatchedMember,
 } from "@/lib/domain/watchboxd-selection";
+import { getTmdbMovie } from "@/lib/tmdb/client";
 import {
   decodeWatchboxdMovie,
   decodeWatchboxdOverlapPage,
@@ -18,6 +23,7 @@ import {
 } from "@/lib/watchboxd/decode";
 import {
   getWatchboxdMovie,
+  getWatchboxdMovieByLetterboxdSlug,
   getWatchboxdOverlap,
   getWatchboxdWatchedHistory,
 } from "@/lib/watchboxd/client";
@@ -31,6 +37,10 @@ export type MovieRatingLookup = {
   letterboxdSlug: string | null;
   posterUrl: string | null;
 };
+
+export type { LetterboxdMovieLookup };
+
+export const MAXIMUM_LETTERBOXD_SLUGS = 10;
 
 export type RoomWatchboxdContext = {
   eligibleForOverlap: boolean;
@@ -139,6 +149,118 @@ export async function lookupWatchboxdMovies(
   return lookups;
 }
 
+async function tmdbSnapshotForId(tmdbId: number | null, signal?: AbortSignal) {
+  if (!tmdbId) return null;
+  try {
+    const movie = await getTmdbMovie(tmdbId, { signal });
+    return {
+      overview: movie.overview,
+      voteAverage: movie.voteAverage,
+      posterPath: movie.posterPath,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function emptyLetterboxdMovieLookup(
+  letterboxdSlug: string,
+  extras: Partial<LetterboxdMovieLookup> = {},
+): LetterboxdMovieLookup {
+  return {
+    letterboxdSlug,
+    tmdbId: extras.tmdbId ?? null,
+    title: extras.title ?? null,
+    year: extras.year ?? null,
+    letterboxdRating: extras.letterboxdRating ?? null,
+    letterboxdUrl: extras.letterboxdUrl ?? null,
+    posterUrl: extras.posterUrl ?? null,
+    letterboxdMovieJobId: extras.letterboxdMovieJobId ?? null,
+    overview: extras.overview ?? null,
+    tmdbRating: extras.tmdbRating ?? null,
+    posterPath: extras.posterPath ?? null,
+  };
+}
+
+export async function lookupWatchboxdMoviesByLetterboxdSlugs(
+  slugs: readonly string[],
+  signal?: AbortSignal,
+): Promise<LetterboxdMovieLookup[]> {
+  const uniqueSlugs = [...new Set(
+    slugs.map((slug) => slug.trim()).filter(Boolean),
+  )].slice(0, MAXIMUM_LETTERBOXD_SLUGS);
+
+  return Promise.all(
+    uniqueSlugs.map(async (letterboxdSlug) => {
+      try {
+        const result = await getWatchboxdMovieByLetterboxdSlug(
+          letterboxdSlug,
+          decodeWatchboxdMovie,
+          { signal },
+        );
+        if (result.status === "pending") {
+          return emptyLetterboxdMovieLookup(letterboxdSlug, {
+            letterboxdMovieJobId: result.jobId,
+          });
+        }
+        if (result.status !== "ready") {
+          return emptyLetterboxdMovieLookup(letterboxdSlug);
+        }
+
+        const tmdb = await tmdbSnapshotForId(result.data.tmdbId, signal);
+        return emptyLetterboxdMovieLookup(letterboxdSlug, {
+          tmdbId: result.data.tmdbId,
+          title: result.data.title,
+          year: result.data.year,
+          letterboxdRating: result.data.letterboxdRating,
+          letterboxdUrl: result.data.letterboxdUrl,
+          posterUrl: result.data.posterUrl,
+          overview: tmdb?.overview ?? null,
+          tmdbRating: tmdb?.voteAverage ?? null,
+          posterPath: tmdb?.posterPath ?? null,
+        });
+      } catch {
+        return emptyLetterboxdMovieLookup(letterboxdSlug);
+      }
+    }),
+  );
+}
+
+async function hydrateOverlapSuggestions(
+  suggestions: OverlapSuggestion[],
+  signal?: AbortSignal,
+): Promise<OverlapSuggestion[]> {
+  const pendingSlugs = suggestions.flatMap((suggestion) => (
+    watchboxdMovieNeedsResolution(suggestion) && suggestion.letterboxdSlug
+      ? [suggestion.letterboxdSlug]
+      : []
+  ));
+  const lookups = pendingSlugs.length > 0
+    ? await lookupWatchboxdMoviesByLetterboxdSlugs(pendingSlugs, signal)
+    : [];
+  const lookupBySlug = new Map(
+    lookups.map((lookup) => [lookup.letterboxdSlug.toLowerCase(), lookup]),
+  );
+
+  const withLetterboxd = suggestions.map((suggestion) => {
+    const slug = suggestion.letterboxdSlug?.toLowerCase();
+    const lookup = slug ? lookupBySlug.get(slug) : undefined;
+    return lookup
+      ? applyLetterboxdMovieLookupToSuggestion(suggestion, lookup)
+      : suggestion;
+  });
+
+  return Promise.all(
+    withLetterboxd.map(async (suggestion) => {
+      if (!suggestion.tmdbId || suggestion.overview || suggestion.tmdbRating != null) {
+        return suggestion;
+      }
+      const tmdb = await tmdbSnapshotForId(suggestion.tmdbId, signal);
+      return applyTmdbDetailsToOverlapSuggestion(suggestion, tmdb);
+    }),
+  );
+}
+
 export async function loadRoomWatchboxdContext(input: {
   participants: readonly {
     userId: string;
@@ -225,7 +347,10 @@ export async function loadRoomWatchboxdContext(input: {
         usernames,
         watched,
         watchedPendingJobIds,
-        suggestions: limitOverlapSuggestions(overlap.data.films),
+        suggestions: await hydrateOverlapSuggestions(
+          limitOverlapSuggestions(overlap.data.films),
+          input.signal,
+        ),
         overlapStatus: "ready",
         overlapPendingJobIds: [],
         retryAfter,
