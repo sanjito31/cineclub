@@ -961,6 +961,7 @@ export function MovieSelection({
                           movie={{
                             title: suggestion.title,
                             posterUrl: suggestion.posterUrl,
+                            posterPath: suggestion.posterPath,
                           }}
                         />
                         <span className="overlap-suggestion-copy">
