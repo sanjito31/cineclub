@@ -13,12 +13,14 @@ Updated August 20, 2026.
 * **Chunk 1 is complete.** Prisma is connected to Supabase PostgreSQL, the schema is migrated, Supabase SSR authentication and profiles are implemented, and authenticated users can create or join an empty room.
 * **Chunk 2 is complete.** Room creation, short codes, joining, capacity checks, roster locking, host controls, progress UI, and server-side phase transitions are implemented and covered by concurrency and authorization tests.
 * **Chunk 3 is mostly complete.** Participants can search TMDB through a server-owned endpoint, submit atomic nominations before the roster is locked, and automatically advance the room to voting once the roster is locked and everyone has submitted. Same-user duplicate selections are rejected; cross-participant duplicates remain anonymous warnings and share one `room_movie`. The “someone already watched this” warning is **not done** and is deferred.
+* **Chunk 4 is complete.** Participants rank nominated movies on `/rooms/[code]/vote` with grouped coverage when the room requires it, Letterboxd movie cards, TMDB overviews on nomination groups, and an immutable ballot. The last ballot advances VOTING → FINALIZING. Coverage uses the same `min(P, M)` ranking floor and every-participant coverage math on the client and server. There is no FINALIZING page yet (Chunk 5), so a refresh after the last ballot leaves `/vote` for the lobby.
 * Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
 * The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
 * Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
 * Watchboxd watchlist, watched-history, overlap, movie, and job methods share reusable `200`/`202`/`404`/unavailable handling and bounded polling. HTTP `200` with `data: null` and `meta.jobs` is treated as pending, the same as `202`. Selection search returns TMDB snapshots and TMDB ratings immediately, plus a Letterboxd rating when Watchboxd is ready or a pending job id when it is not. The browser polls Cineclub rating and overlap endpoints and silently fills Letterboxd ratings and overlap suggestions without blocking search or nomination.
 * Selection lives on `/rooms/[code]/select`, separate from the lobby. Search results paginate five at a time, open TMDB in a new tab, and show poster, title, year, TMDB rating, and Letterboxd rating. Ratings use logo pills (TMDB blue, Letterboxd green, translucent fills, lighter outlines, white scores). Overlap suggestions sit below the slots: top 10 shared watchlist films with poster, title, year, and Letterboxd rating, linking to Letterboxd.
-* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, and silent Letterboxd rating fill. Lint, TypeScript, tests, and the production build pass.
+* Voting lives on `/rooms/[code]/vote`. When coverage is on, nominations are grouped by person; select at least one film per person (extras allowed); a green check marks a covered group; selecting a shared `roomMovieId` once covers all its nominators; the rank list appears only after coverage. When coverage is off, movies move from an unranked pool into the ranked list. Both modes still require `min(P, M)` ranks plus an irreversible checkbox. Native drag reorder plus up/down/remove. Every movie card is a whole-card Letterboxd link (new tab) with a Letterboxd rating pill; Rank/Select/Remove/Up/Down do not navigate. Per-person nomination cards show TMDB overviews fetched live from movie-details by `tmdbId` in `getVotingBallotContext` (Prisma `overview` is not selected on this path). Ranking cards are compact: poster, title/year, nominated-by, and the rating pill; they omit overviews. Nullable `room_movies.overview` exists from a later nomination persist (`20260820190000_add_room_movie_overview` applied), but the vote page does not depend on it.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, silent Letterboxd rating fill, ballot rank validation, participant coverage, immutable and concurrent ballot submits, last-submitter finalizing transitions, ranking UI helpers, and voting UI. Lint, TypeScript, tests, and the production build pass.
 
 ---
 
@@ -531,26 +533,39 @@ Tests:
 
 ---
 
-## Chunk 4 — Voting
+## Chunk 4 — Voting — Complete
 
 Can begin as soon as the nomination schema/API contract is frozen.
 
 Backend:
 
-* [ ] ballot API (**database schema and constraints are complete**)
-* coverage validation
-* atomic submission
-* voting completion transition
+* [x] ballot API: Prisma ballot schema/constraints already existed; `submitBallotAction` accepts FormData `code` plus `ranks` JSON `{ roomMovieId, rank }[]` (1-based, contiguous, unique)
+* [x] coverage validation: at least `min(P, M)` ranks; when `requireParticipantCoverage`, ranked movies’ nominators must cover every locked participant; a shared nomination counts for all nominators
+* [x] atomic immutable ballot write plus `votingSubmittedAt` (no edit after submit)
+* [x] voting completion transition: last ballot moves VOTING → FINALIZING
+* [x] vote-page overviews fetched live from TMDB movie-details by `tmdbId` in `getVotingBallotContext` (Prisma `overview` is not selected on this path). Nullable `room_movies.overview` exists from a later nomination persist; migration `20260820190000_add_room_movie_overview` is applied, but the vote page does not depend on that column.
 
 Frontend, in parallel:
 
-* grouped movie presentation
-* ranking interactions
-* minimum-ranking indicator
-* participant-coverage validation feedback
-* irreversible submission confirmation
+* [x] ranking UI on `/rooms/[code]/vote`
+* [x] grouped nominations when coverage is on: select ≥1 film per person (extras allowed); green check when a group is satisfied; a shared `roomMovieId` selected once satisfies all its nominators; rank list appears only after coverage
+* [x] unranked pool → ranked list when coverage is off; still `min(P, M)`
+* [x] native drag reorder plus up/down and remove
+* [x] whole-card Letterboxd link (new tab) and Letterboxd rating pill on every movie card; Rank/Select/Remove/Up/Down do not navigate
+* [x] TMDB overviews on per-person nomination cards only; ranking cards are compact (poster | title/year + nominated-by + pill) and omit overviews
+* [x] minimum-ranking indicator
+* [x] participant-coverage validation feedback
+* [x] irreversible submission confirmation (checkbox required with coverage + minimum ranks)
 
-**Milestone:** every participant can submit a valid immutable ballot.
+Tests:
+
+* [x] ballot rank validation
+* [x] participant coverage, including shared nominations
+* [x] immutable and concurrent ballot submits
+* [x] last-submitter VOTING → FINALIZING transition
+* [x] ranking UI helpers, grouped coverage, and ballot-context mapping
+
+**Milestone achieved:** every participant can submit a valid immutable ballot. The last voter advances the room to FINALIZING; there is no FINALIZING page yet (Chunk 5), so a refresh after the last ballot leaves `/vote` for the lobby.
 
 ---
 

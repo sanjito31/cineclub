@@ -404,6 +404,7 @@ export function serializeSelectionSubmission(slots: SelectionSlotValue[]) {
       tmdbId: movie?.tmdbId ?? null,
       title: movie?.title ?? null,
       releaseYear: movie?.releaseYear ?? null,
+      overview: movie?.overview ?? null,
       posterPath: movie?.posterPath ?? null,
     })),
   );

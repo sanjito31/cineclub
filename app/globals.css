@@ -283,6 +283,125 @@ button { color: inherit; }
 .selection-complete-panel .selection-post-submit-warning { margin-top: 9px; color: #6d5011; }
 .selection-panel button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
+.voting-minimum { margin: -8px 0 8px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.voting-ranked, .voting-pool, .voting-nominations { display: grid; gap: 10px; }
+.voting-ranked h3, .voting-pool h3, .voting-nominations h3 { margin: 0; font: 700 18px Georgia, serif; }
+.voting-nominations > p, .voting-coverage > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.voting-nominations.is-complete > p { color: #245440; }
+.voting-empty { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.voting-nomination-group {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  background: #faf7ef;
+}
+.voting-nomination-group.is-covered { border-color: #bfd7ca; background: #edf6f1; }
+.voting-nomination-heading { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; font: 700 16px Georgia, serif; }
+.voting-nomination-check {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #3f8062;
+  font-size: 12px;
+  font-weight: 800;
+}
+.voting-rank-list, .voting-pool-list, .voting-nominate-list { padding: 0; margin: 0; list-style: none; display: grid; gap: 10px; }
+.voting-rank-item, .voting-pool-list > li, .voting-nominate-item {
+  position: relative;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  align-items: center;
+  gap: 10px;
+  background: white;
+}
+.voting-rank-item {
+  padding: 8px 10px;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  background: #faf7ef;
+  box-shadow: inset 4px 0 var(--orange);
+}
+.voting-rank-item.is-dragging { opacity: .55; }
+.voting-rank-item.is-drop-target { border-color: var(--orange); }
+.voting-pool-list > li, .voting-nominate-item { grid-template-columns: minmax(0, 1fr) auto; }
+.voting-nominate-item { padding: 12px 14px; align-items: start; }
+.voting-nominate-item.is-selected { border-color: #bfd7ca; background: #edf6f1; box-shadow: inset 4px 0 #3f8062; }
+.voting-card-letterboxd {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+.voting-card-letterboxd:focus-visible { outline: 2px solid var(--orange); outline-offset: -2px; }
+.voting-rank-item > :not(.voting-card-letterboxd),
+.voting-pool-list > li > :not(.voting-card-letterboxd),
+.voting-nominate-item > :not(.voting-card-letterboxd) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+.voting-rank-item > .voting-drag-handle,
+.voting-rank-item > .voting-rank-actions,
+.voting-pool-list > li > .button,
+.voting-nominate-item > .button { pointer-events: auto; }
+.voting-rank-item:has(.voting-card-letterboxd:hover) .voting-movie-heading strong,
+.voting-pool-list > li:has(.voting-card-letterboxd:hover) .voting-movie-heading strong,
+.voting-nominate-item:has(.voting-card-letterboxd:hover) .voting-movie-heading strong { color: var(--orange); }
+.voting-drag-handle {
+  width: 28px;
+  height: 32px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: grab;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+}
+.voting-rank-item.is-dragging .voting-drag-handle { cursor: grabbing; }
+.voting-rank-index {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--green);
+  font: 700 13px Georgia, serif;
+}
+.voting-movie-identity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.voting-nominate-item .voting-movie-identity { align-items: start; }
+.voting-movie-copy { min-width: 0; display: grid; gap: 3px; }
+.voting-movie-heading { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.voting-movie-heading strong { font-size: 15px; line-height: 1.3; }
+.voting-movie-heading > span:not(.rating-badge) { color: var(--muted); font-size: 11px; }
+.voting-rank-item .voting-movie-heading .rating-badge { height: 24px; padding: 2px 8px 2px 3px; gap: 4px; }
+.voting-rank-item .voting-movie-heading .rating-badge-logo { width: 16px; height: 16px; }
+.voting-rank-item .voting-movie-heading .rating-badge-value { font-size: 12px; }
+.voting-nominators { margin: 0; color: #245440; font-size: 10px; line-height: 1.35; }
+.voting-movie-overview { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.voting-rank-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.voting-unrank { color: #8b2414; }
+.voting-panel .voting-rank-actions .button:disabled,
+.voting-panel .voting-pool-list .button:disabled,
+.voting-panel .voting-nominate-item .button:disabled { cursor: not-allowed; }
+.voting-panel button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+
 .dashboard-page { min-height: 100vh; padding-bottom: 80px; background: radial-gradient(circle at 75% 0, #fff5d0 0, transparent 26%), var(--paper); }
 .dashboard-header { max-width: 1100px; }
 .dashboard-nav { display: flex; align-items: center; gap: 24px; font-size: 13px; font-weight: 700; }
@@ -323,6 +442,7 @@ button { color: inherit; }
   .dashboard-hero { align-items: flex-start; flex-direction: column; }
   .dashboard-room-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .selection-intro { align-items: flex-start; flex-direction: column; gap: 13px; }
+  .voting-rank-actions { justify-content: flex-start; }
   .task-identity { align-items: stretch; flex-direction: column; }
   .task-identity-meta { justify-content: space-between; width: 100%; }
   .task-room-code { text-align: left; }
@@ -351,4 +471,12 @@ button { color: inherit; }
   .movie-search-controls, .movie-result-list > li { grid-template-columns: 1fr; }
   .movie-result-list .button { width: 100%; }
   .selection-complete-panel { align-items: flex-start; }
+  .voting-rank-item { grid-template-columns: auto auto minmax(0, 1fr); }
+  .voting-pool-list > li, .voting-nominate-item { grid-template-columns: minmax(0, 1fr); }
+  .voting-rank-actions,
+  .voting-pool-list .button,
+  .voting-nominate-item .button { grid-column: 1 / -1; }
+  .voting-rank-actions { justify-content: flex-start; }
+  .voting-pool-list .button,
+  .voting-nominate-item .button { width: 100%; }
 }

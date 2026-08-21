@@ -88,6 +88,7 @@ model RoomMovie {
   tmdbId           Int              @map("tmdb_id")
   title            String
   releaseYear      Int?             @map("release_year") @db.SmallInt
+  overview         String?
   posterPath       String?          @map("poster_path")
   letterboxdSlug   String?          @map("letterboxd_slug")
   letterboxdRating Decimal?         @map("letterboxd_rating") @db.Decimal(3, 2)

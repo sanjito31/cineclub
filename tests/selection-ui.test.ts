@@ -75,6 +75,7 @@ test("atomic submission payload contains the backend movie snapshots", () => {
         tmdbId: 101,
         title: "First",
         releaseYear: 2026,
+        overview: null,
         posterPath: null,
       },
       {
@@ -82,6 +83,7 @@ test("atomic submission payload contains the backend movie snapshots", () => {
         tmdbId: 202,
         title: "Second",
         releaseYear: 2026,
+        overview: null,
         posterPath: null,
       },
     ]),

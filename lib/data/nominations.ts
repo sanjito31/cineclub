@@ -195,9 +195,10 @@ export async function submitNominations(
           tmdbId: selection.tmdbId,
           title: selection.title,
           releaseYear: selection.releaseYear,
+          overview: selection.overview,
           posterPath: selection.posterPath,
         },
-        update: {},
+        update: selection.overview ? { overview: selection.overview } : {},
         select: {
           id: true,
           tmdbId: true,

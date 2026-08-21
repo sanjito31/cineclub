@@ -51,10 +51,15 @@ export type TmdbClientConfig = {
   timeoutMs?: number;
 };
 
-export type TmdbSearchOptions = {
-  page?: number;
+export type TmdbRequestOptions = {
   signal?: AbortSignal;
 };
+
+export type TmdbSearchOptions = TmdbRequestOptions & {
+  page?: number;
+};
+
+export type TmdbMovieDetailsOptions = TmdbRequestOptions;
 
 export const TMDB_NATIVE_PAGE_SIZE = 20;
 export const SEARCH_RESULTS_PER_PAGE = 5;
@@ -228,6 +233,43 @@ export function normalizeTmdbSearchResponse(value: unknown): TmdbMovieSearchPage
   };
 }
 
+export function normalizeTmdbMovieDetails(value: unknown): TmdbMovieSearchResult {
+  const movie = normalizeMovie(value);
+  if (!movie) {
+    throw new TmdbServiceError(
+      "malformed_response",
+      "TMDB returned an invalid movie details response.",
+    );
+  }
+  return movie;
+}
+
+export async function loadTmdbMovieOverviews(
+  client: {
+    getMovie(
+      tmdbId: number,
+      options?: TmdbMovieDetailsOptions,
+    ): Promise<TmdbMovieSearchResult>;
+  },
+  tmdbIds: readonly number[],
+  options?: TmdbMovieDetailsOptions,
+): Promise<Map<number, string | null>> {
+  const uniqueIds = [...new Set(
+    tmdbIds.filter((id) => Number.isInteger(id) && id > 0),
+  )];
+  const entries = await Promise.all(
+    uniqueIds.map(async (tmdbId) => {
+      try {
+        const movie = await client.getMovie(tmdbId, options);
+        return [tmdbId, movie.overview] as const;
+      } catch {
+        return [tmdbId, null] as const;
+      }
+    }),
+  );
+  return new Map(entries);
+}
+
 function getRetryAfter(response: Response) {
   const seconds = Number(response.headers.get("retry-after"));
   return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 60) : null;
@@ -279,6 +321,74 @@ export function createTmdbClient(config: TmdbClientConfig = {}) {
     );
   }
 
+  async function requestJson(
+    path: string,
+    searchParams: Record<string, string>,
+    options: TmdbRequestOptions,
+    messages: {
+      aborted: string;
+      malformed: string;
+      timeout: string;
+      unavailable: string;
+    },
+  ): Promise<unknown> {
+    const url = new URL(
+      `${baseUrl.pathname.replace(/\/$/, "")}${path}`,
+      baseUrl,
+    );
+    for (const [key, value] of Object.entries(searchParams)) {
+      url.searchParams.set(key, value);
+    }
+
+    const headers = new Headers({ Accept: "application/json" });
+    if (readAccessToken) {
+      headers.set("Authorization", `Bearer ${readAccessToken}`);
+    } else {
+      url.searchParams.set("api_key", apiKey as string);
+    }
+
+    const requestSignal = createRequestSignal(options.signal, timeoutMs);
+
+    try {
+      const response = await fetchImpl(url, {
+        headers,
+        cache: "no-store",
+        signal: requestSignal.signal,
+      });
+
+      if (!response.ok) {
+        const isCredentialError = response.status === 401 || response.status === 403;
+        throw new TmdbServiceError(
+          isCredentialError ? "configuration" : "unavailable",
+          isCredentialError
+            ? "TMDB rejected the configured credentials."
+            : messages.unavailable,
+          {
+            retryAfter: getRetryAfter(response),
+            statusCode: response.status,
+          },
+        );
+      }
+
+      try {
+        return await response.json();
+      } catch {
+        throw new TmdbServiceError("malformed_response", messages.malformed);
+      }
+    } catch (error) {
+      if (error instanceof TmdbServiceError) throw error;
+      if (requestSignal.wasTimedOut()) {
+        throw new TmdbServiceError("timeout", messages.timeout);
+      }
+      if (options.signal?.aborted) {
+        throw new TmdbServiceError("aborted", messages.aborted);
+      }
+      throw new TmdbServiceError("unavailable", messages.unavailable);
+    } finally {
+      requestSignal.cleanup();
+    }
+  }
+
   return {
     async searchMovies(
       query: string,
@@ -286,74 +396,47 @@ export function createTmdbClient(config: TmdbClientConfig = {}) {
     ): Promise<TmdbMovieSearchPage> {
       const normalizedQuery = normalizeQuery(query);
       const page = normalizePage(options.page);
-      const url = new URL(
-        `${baseUrl.pathname.replace(/\/$/, "")}/search/movie`,
-        baseUrl,
+      const body = await requestJson(
+        "/search/movie",
+        {
+          query: normalizedQuery,
+          include_adult: "false",
+          language: "en-US",
+          page: String(page),
+        },
+        options,
+        {
+          aborted: "TMDB movie search was cancelled.",
+          malformed: "TMDB returned an invalid movie search response.",
+          timeout: "TMDB movie search took too long. Please try again.",
+          unavailable: "TMDB movie search is unavailable right now.",
+        },
       );
-      url.searchParams.set("query", normalizedQuery);
-      url.searchParams.set("include_adult", "false");
-      url.searchParams.set("language", "en-US");
-      url.searchParams.set("page", String(page));
-
-      const headers = new Headers({ Accept: "application/json" });
-      if (readAccessToken) {
-        headers.set("Authorization", `Bearer ${readAccessToken}`);
-      } else {
-        url.searchParams.set("api_key", apiKey as string);
-      }
-
-      const requestSignal = createRequestSignal(options.signal, timeoutMs);
-
-      try {
-        const response = await fetchImpl(url, {
-          headers,
-          cache: "no-store",
-          signal: requestSignal.signal,
-        });
-
-        if (!response.ok) {
-          const isCredentialError = response.status === 401 || response.status === 403;
-          throw new TmdbServiceError(
-            isCredentialError ? "configuration" : "unavailable",
-            isCredentialError
-              ? "TMDB rejected the configured credentials."
-              : "TMDB movie search is unavailable right now.",
-            {
-              retryAfter: getRetryAfter(response),
-              statusCode: response.status,
-            },
-          );
-        }
-
-        let body: unknown;
-        try {
-          body = await response.json();
-        } catch {
-          throw new TmdbServiceError(
-            "malformed_response",
-            "TMDB returned an invalid movie search response.",
-          );
-        }
-
-        return normalizeTmdbSearchResponse(body);
-      } catch (error) {
-        if (error instanceof TmdbServiceError) throw error;
-        if (requestSignal.wasTimedOut()) {
-          throw new TmdbServiceError(
-            "timeout",
-            "TMDB movie search took too long. Please try again.",
-          );
-        }
-        if (options.signal?.aborted) {
-          throw new TmdbServiceError("aborted", "TMDB movie search was cancelled.");
-        }
+      return normalizeTmdbSearchResponse(body);
+    },
+    async getMovie(
+      tmdbId: number,
+      options: TmdbMovieDetailsOptions = {},
+    ): Promise<TmdbMovieSearchResult> {
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) {
         throw new TmdbServiceError(
-          "unavailable",
-          "TMDB movie search is unavailable right now.",
+          "invalid_query",
+          "TMDB movie ids must be positive integers.",
         );
-      } finally {
-        requestSignal.cleanup();
       }
+
+      const body = await requestJson(
+        `/movie/${tmdbId}`,
+        { language: "en-US" },
+        options,
+        {
+          aborted: "TMDB movie details were cancelled.",
+          malformed: "TMDB returned an invalid movie details response.",
+          timeout: "TMDB movie details took too long. Please try again.",
+          unavailable: "TMDB movie details are unavailable right now.",
+        },
+      );
+      return normalizeTmdbMovieDetails(body);
     },
   };
 }

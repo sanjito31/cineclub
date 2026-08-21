@@ -2,6 +2,7 @@ import { DomainError } from "@/lib/auth/errors";
 
 const maximumTitleLength = 200;
 const maximumPosterPathLength = 500;
+const maximumOverviewLength = 2000;
 const earliestReleaseYear = 1888;
 const latestReleaseYear = 9999;
 const maximumTmdbId = 2_147_483_647;
@@ -11,6 +12,7 @@ export type NominationMovieSnapshot = {
   tmdbId: number;
   title: string;
   releaseYear: number | null;
+  overview: string | null;
   posterPath: string | null;
 };
 
@@ -135,10 +137,16 @@ function normalizeMovieSnapshot(value: Record<string, unknown>) {
     );
   }
 
+  const overviewValue = normalizedNullableString(value.overview);
+  const overview = typeof overviewValue === "string"
+    ? overviewValue.slice(0, maximumOverviewLength)
+    : null;
+
   return {
     tmdbId,
     title,
     releaseYear,
+    overview,
     posterPath,
   } satisfies NominationMovieSnapshot;
 }

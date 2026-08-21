@@ -6,6 +6,7 @@ import {
 } from "../lib/integrations/async-resource";
 import {
   createTmdbClient,
+  loadTmdbMovieOverviews,
   paginateTmdbSearchPage,
   tmdbPageForSearchPage,
   TmdbServiceError,
@@ -126,6 +127,100 @@ test("TMDB search rejects invalid input before contacting the API", async () => 
       error instanceof TmdbServiceError && error.code === "invalid_query",
   );
   assert.equal(contacted, false);
+});
+
+test("TMDB movie details normalize overviews by tmdb id", async () => {
+  const requestedUrls: URL[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    requestedUrls.push(url);
+    const movieId = Number(url.pathname.split("/").at(-1));
+    if (movieId === 404) {
+      return jsonResponse({ status_code: 34 }, { status: 404 });
+    }
+    if (movieId === 551) {
+      return jsonResponse({ id: 551, title: " " });
+    }
+    return jsonResponse({
+      id: 550,
+      title: " Fight Club ",
+      original_title: "Fight Club",
+      overview: "  An insomniac meets a soap maker.  ",
+      release_date: "1999-10-15",
+      poster_path: "/poster.jpg",
+      backdrop_path: "/backdrop.jpg",
+      vote_average: 8.4,
+    });
+  };
+
+  const client = createTmdbClient({
+    fetchImpl,
+    readAccessToken: "server-secret",
+  });
+
+  assert.deepEqual(await client.getMovie(550), {
+    tmdbId: 550,
+    title: "Fight Club",
+    originalTitle: "Fight Club",
+    overview: "An insomniac meets a soap maker.",
+    releaseDate: "1999-10-15",
+    releaseYear: 1999,
+    posterPath: "/poster.jpg",
+    backdropPath: "/backdrop.jpg",
+    voteAverage: 8.4,
+  });
+  assert.equal(requestedUrls[0]?.pathname, "/3/movie/550");
+  assert.equal(requestedUrls[0]?.searchParams.get("language"), "en-US");
+  assert.equal(requestedUrls[0]?.searchParams.has("api_key"), false);
+
+  await assert.rejects(
+    () => client.getMovie(0),
+    (error: unknown) =>
+      error instanceof TmdbServiceError && error.code === "invalid_query",
+  );
+  await assert.rejects(
+    () => client.getMovie(404),
+    (error: unknown) =>
+      error instanceof TmdbServiceError
+      && error.code === "unavailable"
+      && error.statusCode === 404,
+  );
+  await assert.rejects(
+    () => client.getMovie(551),
+    (error: unknown) =>
+      error instanceof TmdbServiceError && error.code === "malformed_response",
+  );
+});
+
+test("TMDB overview loading is resilient and deduplicates movie ids", async () => {
+  const requestedPaths: string[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    requestedPaths.push(url.pathname);
+    const movieId = Number(url.pathname.split("/").at(-1));
+    if (movieId === 22) {
+      return jsonResponse({ status_code: 34 }, { status: 500 });
+    }
+    return jsonResponse({
+      id: movieId,
+      title: `Movie ${movieId}`,
+      overview: `Overview for ${movieId}`,
+    });
+  };
+
+  const overviews = await loadTmdbMovieOverviews(
+    createTmdbClient({
+      fetchImpl,
+      apiKey: "server-secret",
+    }),
+    [11, 11, 22, 0],
+  );
+
+  assert.deepEqual([...overviews.entries()], [
+    [11, "Overview for 11"],
+    [22, null],
+  ]);
+  assert.deepEqual(requestedPaths.toSorted(), ["/3/movie/11", "/3/movie/22"]);
 });
 
 test("TMDB search maps timeouts and malformed envelopes", async (t) => {

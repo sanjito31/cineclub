@@ -122,12 +122,14 @@ test("selection validation normalizes snapshots and rejects malformed metadata",
       movie(1, 101, {
         title: "  A   Movie  ",
         posterPath: " /poster.jpg ",
+        overview: "  An insomniac meets a soap maker.  ",
       }),
     ],
     1,
   );
   assert.equal(validated[0]?.title, "A Movie");
   assert.equal(validated[0]?.posterPath, "/poster.jpg");
+  assert.equal(validated[0]?.overview, "An insomniac meets a soap maker.");
 
   await assert.rejects(
     service.submitNominations({
@@ -274,7 +276,7 @@ test("a successful submission is immutable", async () => {
   const first = await service.submitNominations({
     userId: "host",
     code: "ABC234",
-    selections: [movie(1, 101)],
+    selections: [movie(1, 101, { overview: "A host favorite about found footage." })],
   });
   await assert.rejects(
     service.submitNominations({
@@ -287,8 +289,8 @@ test("a successful submission is immutable", async () => {
 
   assert.equal(first.nominations.length, 1);
   assert.deepEqual(
-    fixture.roomMovieRows().map(({ tmdbId }) => tmdbId),
-    [101],
+    fixture.roomMovieRows().map(({ tmdbId, overview }) => ({ tmdbId, overview })),
+    [{ tmdbId: 101, overview: "A host favorite about found footage." }],
   );
   assert.equal(fixture.nominationRows().length, 1);
 });

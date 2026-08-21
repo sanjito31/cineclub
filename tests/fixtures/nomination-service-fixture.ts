@@ -24,6 +24,7 @@ type RoomMovie = {
   tmdbId: number;
   title: string;
   releaseYear: number | null;
+  overview: string | null;
   posterPath: string | null;
 };
 
@@ -187,13 +188,17 @@ const transactionClient = {
     upsert: async (query: {
       where: { roomId_tmdbId: { roomId: string; tmdbId: number } };
       create: Omit<RoomMovie, "id">;
+      update?: Partial<Omit<RoomMovie, "id">>;
     }) => {
       const existing = [...roomMovies.values()].find(
         ({ roomId, tmdbId }) =>
           roomId === query.where.roomId_tmdbId.roomId &&
           tmdbId === query.where.roomId_tmdbId.tmdbId,
       );
-      if (existing) return { id: existing.id, tmdbId: existing.tmdbId };
+      if (existing) {
+        if (query.update) Object.assign(existing, query.update);
+        return { id: existing.id, tmdbId: existing.tmdbId };
+      }
 
       const movie: RoomMovie = {
         id: `room-movie-${nextRoomMovieId++}`,
