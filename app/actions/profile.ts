@@ -10,7 +10,7 @@ import {
   readString,
   safeNextPath,
 } from "@/lib/validation/shared";
-import { lookupWatchboxdUser } from "@/lib/watchboxd/client";
+import { lookupWatchboxdUser, warmWatchboxdCache } from "@/lib/watchboxd/client";
 import type { ActionState } from "@/app/actions/types";
 
 export async function updateProfile(
@@ -85,6 +85,10 @@ export async function updateProfile(
       status: "error",
       message: error instanceof Error ? error.message : "Unable to save your profile.",
     };
+  }
+
+  if (verifiedLetterboxdUsername) {
+    warmWatchboxdCache(verifiedLetterboxdUsername);
   }
 
   revalidatePath("/profile");

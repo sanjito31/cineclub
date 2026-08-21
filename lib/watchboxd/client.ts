@@ -110,6 +110,14 @@ export function getWatchboxdJob<T>(
   return createClient().job(jobId, decode, options);
 }
 
+const noopDecoder = () => null;
+
+export function warmWatchboxdCache(username: string) {
+  const client = createClient();
+  client.watchlist(username, noopDecoder).catch(() => {});
+  client.watchedHistory(username, noopDecoder).catch(() => {});
+}
+
 export type {
   AsyncResourcePollResult,
   AsyncResourceResult,
