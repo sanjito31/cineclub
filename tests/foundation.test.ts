@@ -41,7 +41,7 @@ test("room lifecycle only permits the planned forward sequence", () => {
   }, /cannot move/);
 });
 
-test("dashboard separates hosted, joined, and completed rooms", () => {
+test("dashboard separates active and completed rooms", () => {
   const rooms = [
     { id: "hosted", ownerId: "user-1", phase: RoomPhase.SELECTION },
     { id: "joined", ownerId: "user-2", phase: RoomPhase.REVEAL },
@@ -51,12 +51,12 @@ test("dashboard separates hosted, joined, and completed rooms", () => {
 
   const result = categorizeDashboardRooms(rooms, "user-1");
 
-  assert.deepEqual(result.hosting.map((room) => room.id), ["hosted"]);
-  assert.deepEqual(result.current.map((room) => room.id), ["joined"]);
-  assert.deepEqual(result.previous.map((room) => room.id), [
+  assert.deepEqual(result.active.map((room) => room.id), ["hosted", "joined"]);
+  assert.deepEqual(result.completed.map((room) => room.id), [
     "completed-hosted",
     "completed-joined",
   ]);
+  assert.equal(result.userId, "user-1");
 });
 
 test("room task paths keep selection and voting off the lobby", () => {

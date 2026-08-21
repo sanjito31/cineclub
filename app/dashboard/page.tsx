@@ -6,10 +6,11 @@ import { getProfile } from "@/lib/data/profiles";
 import { getDashboardRooms } from "@/lib/data/rooms";
 import { roomPhaseLabels } from "@/lib/domain/room-lifecycle";
 import { roomTaskPath } from "@/lib/domain/room-paths";
+import { DashboardTabs } from "./dashboard-tabs";
 
 export const dynamic = "force-dynamic";
 
-type DashboardRoom = Awaited<ReturnType<typeof getDashboardRooms>>["hosting"][number];
+type DashboardRoom = Awaited<ReturnType<typeof getDashboardRooms>>["active"][number];
 
 function formatUpdatedAt(date: Date) {
   return new Intl.DateTimeFormat("en", {
@@ -21,16 +22,22 @@ function formatUpdatedAt(date: Date) {
 
 function RoomCard({ room, hosting = false }: { room: DashboardRoom; hosting?: boolean }) {
   return (
-    <Link className="dashboard-room-card" href={roomTaskPath(room.code, room.phase)}>
+    <Link
+      className={`dashboard-room-card${hosting ? " is-hosting" : ""}`}
+      href={roomTaskPath(room.code, room.phase)}
+    >
       <span className="dashboard-room-card-topline">
-        <span className={`status-pill phase-${room.phase.toLowerCase()}`}>
-          {roomPhaseLabels[room.phase]}
+        <span className="dashboard-room-card-pills">
+          <span className={`status-pill phase-${room.phase.toLowerCase()}`}>
+            {roomPhaseLabels[room.phase]}
+          </span>
+          {hosting && <span className="status-pill hosting-pill">Hosting</span>}
         </span>
         <span className="dashboard-room-code">{room.code}</span>
       </span>
       <span className="dashboard-room-name">{room.name}</span>
       <span className="dashboard-room-host">
-        {hosting ? "You’re hosting" : `Hosted by ${room.owner.displayName}`}
+        {hosting ? "You're hosting" : `Hosted by ${room.owner.displayName}`}
       </span>
       <span className="dashboard-room-meta">
         <span>{room._count.participants} of {room.maxParticipants} members</span>
@@ -41,38 +48,24 @@ function RoomCard({ room, hosting = false }: { room: DashboardRoom; hosting?: bo
   );
 }
 
-function RoomSection({
-  eyebrow,
-  title,
-  description,
+function RoomGrid({
   rooms,
-  hosting = false,
+  userId,
   emptyMessage,
 }: {
-  eyebrow: string;
-  title: string;
-  description: string;
   rooms: DashboardRoom[];
-  hosting?: boolean;
+  userId: string;
   emptyMessage: string;
 }) {
+  if (rooms.length === 0) {
+    return <div className="dashboard-empty-row">{emptyMessage}</div>;
+  }
   return (
-    <section className="dashboard-section">
-      <div className="dashboard-section-heading">
-        <div>
-          <span className="eyebrow">{eyebrow}</span>
-          <h2>{title}</h2>
-        </div>
-        <p>{description}</p>
-      </div>
-      {rooms.length > 0 ? (
-        <div className="dashboard-room-grid">
-          {rooms.map((room) => <RoomCard key={room.id} room={room} hosting={hosting} />)}
-        </div>
-      ) : (
-        <div className="dashboard-empty-row">{emptyMessage}</div>
-      )}
-    </section>
+    <div className="dashboard-room-grid">
+      {rooms.map((room) => (
+        <RoomCard key={room.id} room={room} hosting={room.ownerId === userId} />
+      ))}
+    </div>
   );
 }
 
@@ -115,27 +108,23 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <RoomSection
-          eyebrow="You’re the host"
-          title="Rooms you’re hosting"
-          description="Active rooms you created and control."
-          rooms={rooms.hosting}
-          hosting
-          emptyMessage="You aren’t hosting an active room yet."
-        />
-        <RoomSection
-          eyebrow="In progress"
-          title="Rooms you’re currently in"
-          description="Active rooms where you joined the crew."
-          rooms={rooms.current}
-          emptyMessage="You haven’t joined an active room yet."
-        />
-        <RoomSection
-          eyebrow="The archive"
-          title="Previous rooms"
-          description="Completed movie nights you hosted or joined."
-          rooms={rooms.previous}
-          emptyMessage="Completed rooms will collect here."
+        <DashboardTabs
+          activeCount={rooms.active.length}
+          completedCount={rooms.completed.length}
+          activeContent={
+            <RoomGrid
+              rooms={rooms.active}
+              userId={rooms.userId}
+              emptyMessage="No active rooms yet — create one or join with a code."
+            />
+          }
+          completedContent={
+            <RoomGrid
+              rooms={rooms.completed}
+              userId={rooms.userId}
+              emptyMessage="Completed rooms will collect here."
+            />
+          }
         />
       </div>
     </main>

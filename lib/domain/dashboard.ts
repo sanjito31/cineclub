@@ -10,12 +10,8 @@ export function categorizeDashboardRooms<T extends DashboardRoomIdentity>(
   userId: string,
 ) {
   return {
-    hosting: rooms.filter(
-      (room) => room.ownerId === userId && room.phase !== RoomPhase.COMPLETE,
-    ),
-    current: rooms.filter(
-      (room) => room.ownerId !== userId && room.phase !== RoomPhase.COMPLETE,
-    ),
-    previous: rooms.filter((room) => room.phase === RoomPhase.COMPLETE),
+    active: rooms.filter((room) => room.phase !== RoomPhase.COMPLETE),
+    completed: rooms.filter((room) => room.phase === RoomPhase.COMPLETE),
+    userId,
   };
 }
