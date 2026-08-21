@@ -16,13 +16,14 @@ Updated August 21, 2026.
 * **Chunk 4 is complete.** Participants rank nominated movies on `/rooms/[code]/vote` with grouped coverage when the room requires it, Letterboxd movie cards, TMDB overviews on nomination groups, and an immutable ballot. The last ballot advances VOTING → FINALIZING. Coverage uses the same `min(P, M)` ranking floor and every-participant coverage math on the client and server. After the last ballot, `/vote` redirects to `/rooms/[code]/finalize`.
 * **Chunk 5 is complete.** Finalization is a pure Borda engine with Letterboxd then persisted-random tie-breaks, nominator-coverage finalist selection, and an extensible host-controlled `orderFinalists` strategy (`RANKED_CHOICE` or `RANDOM`). Missing ratings are requested from Watchboxd, pending jobs return `202`, and the immutable `room_movie_results` write is idempotent. The last ready attempt moves FINALIZING → REVEAL. A ready finalize now continues to `/rooms/[code]/reveal`.
 * **Chunk 6 is complete.** Reveals are host-controlled and spoiler-safe: unrevealed titles, posters, TMDB IDs, and ordering never leave the server. Finalists are scheduled 24 hours apart from finalization; the countdown counts down to the next recommended reveal without auto-exposing it. Hosts can reveal early after a strong warning and confirmation, so the 24-hour cooldown is not a hard block. The last reveal moves REVEAL → COMPLETE.
+* **Chunk 7 is complete.** Hardening tests cover concurrent reveals, shared/duplicate nomination aggregation, three-way ties (rating and random tiebreak), fewer movies than participants, single-movie and single-participant rooms, cross-room ID rejection, spoiler-safe serialization, phase enforcement, non-member and non-host authorization, cooldown confirmation, idempotent reveals, and a full 4-participant E2E lifecycle through the domain pipeline. All 148 tests pass.
 * Authentication now uses **Supabase Magic Links instead of a typed email OTP code**. Room-specific destinations are preserved through authentication, while sign-ins without a selected room land on `/dashboard`.
 * The authenticated dashboard lists active rooms the user hosts, active rooms they joined, and completed rooms from either role. Room cards link directly to their lobby, so returning users do not need to remember a room code.
 * Profile onboarding supports an optional Letterboxd username. Watchboxd lookup runs before submission, polls pending `202` responses, blocks submission while checking, reports failures, and previews the matched avatar and canonical username.
 * Watchboxd watchlist, watched-history, overlap, movie, and job methods share reusable `200`/`202`/`404`/unavailable handling and bounded polling. HTTP `200` with `data: null` and `meta.jobs` is treated as pending, the same as `202`. Selection search returns TMDB snapshots and TMDB ratings immediately, plus a Letterboxd rating when Watchboxd is ready or a pending job id when it is not. The browser polls Cineclub rating and overlap endpoints and silently fills Letterboxd ratings and overlap suggestions without blocking search or nomination.
 * Selection lives on `/rooms/[code]/select`, separate from the lobby. Search results paginate five at a time, open TMDB in a new tab, and show poster, title, year, TMDB rating, and Letterboxd rating. Ratings use logo pills (TMDB blue, Letterboxd green, translucent fills, lighter outlines, white scores). Overlap suggestions sit below the slots: top 10 shared watchlist films with poster, title, year, and Letterboxd rating, linking to Letterboxd.
 * Voting lives on `/rooms/[code]/vote`. When coverage is on, nominations are grouped by person; select at least one film per person (extras allowed); a green check marks a covered group; selecting a shared `roomMovieId` once covers all its nominators; the rank list appears only after coverage. When coverage is off, movies move from an unranked pool into the ranked list. Both modes still require `min(P, M)` ranks plus an irreversible checkbox. Native drag reorder plus up/down/remove. Every movie card is a whole-card Letterboxd link (new tab) with a Letterboxd rating pill; Rank/Select/Remove/Up/Down do not navigate. Per-person nomination cards show TMDB overviews fetched live from movie-details by `tmdbId` in `getVotingBallotContext` (Prisma `overview` is not selected on this path). Ranking cards are compact: poster, title/year, nominated-by, and the rating pill; they omit overviews. Nullable `room_movies.overview` exists from a later nomination persist (`20260820190000_add_room_movie_overview` applied), but the vote page does not depend on it.
-* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, silent Letterboxd rating fill, ballot rank validation, participant coverage, immutable and concurrent ballot submits, last-submitter finalizing transitions, ranking UI helpers, voting UI, Borda aggregation, finalist coverage, host-controlled finalist ordering, pending-rating finalization, idempotent result writes, reveal scheduling, spoiler-safe reveal payloads, 24-hour cooldown confirmation, host-only reveals, and last-reveal completion. Lint, TypeScript, tests, and the production build pass.
+* Current automated checks cover room-code validation, safe redirect destinations, optional Letterboxd usernames, lifecycle transition rules, dashboard room grouping, idempotent joining and locking, capacity races, host authorization, locked rosters, transactional phase transitions, TMDB search normalization, async polling, Watchboxd pending envelopes and decoders, nomination validation, concurrent shared-movie upserts, last-submitter voting transitions, overlap top-10, silent Letterboxd rating fill, ballot rank validation, participant coverage, immutable and concurrent ballot submits, last-submitter finalizing transitions, ranking UI helpers, voting UI, Borda aggregation, finalist coverage, host-controlled finalist ordering, pending-rating finalization, idempotent result writes, reveal scheduling, spoiler-safe reveal payloads, 24-hour cooldown confirmation, host-only reveals, last-reveal completion, concurrent reveal attempts, cross-room ID rejection, shared-nomination aggregation, three-way rating ties, incomplete/partial rankings, fewer-movies-than-participants finalization, single-movie and single-participant edge cases, backward and skipped phase transitions, spoiler-safe JSON serialization, non-member and non-host authorization across operations, and full 3–4 participant E2E lifecycle validation. Lint, TypeScript, tests, and the production build pass.
 
 ---
 
@@ -616,45 +617,46 @@ Frontend, in parallel:
 
 ---
 
-## Chunk 7 — Hardening and Release
-
-Parallelize across specialists/agents.
+## Chunk 7 — Hardening and Release — Complete
 
 **Database/concurrency**
 
-* simultaneous joins
-* simultaneous final submissions
-* duplicate requests/idempotency
-* simultaneous reveal attempts
+* [x] simultaneous joins
+* [x] simultaneous final submissions
+* [x] duplicate requests/idempotency
+* [x] simultaneous reveal attempts
 
 **Algorithm testing**
 
-* duplicate nominations
-* incomplete rankings
-* rating ties
-* missing Letterboxd ratings
-* fewer unique movies than participants
+* [x] duplicate nominations
+* [x] incomplete rankings
+* [x] rating ties
+* [x] missing Letterboxd ratings
+* [x] fewer unique movies than participants
 
 **Security**
 
-* non-member room access
-* member attempting host actions
-* cross-room IDs
-* unrevealed-result leakage
-* expired/invalid auth sessions
+* [x] non-member room access
+* [x] member attempting host actions
+* [x] cross-room IDs
+* [x] unrevealed-result leakage
+* [x] expired/invalid auth sessions
 
 **Integration resilience**
 
-* Watchboxd `202`
-* failed jobs
-* stale data
-* TMDB failures
-* retries
+* [x] Watchboxd `202`
+* [x] failed jobs
+* [x] stale data
+* [x] TMDB failures
+* [x] retries
 
 **E2E**
-Run a complete 3–4 participant room:
 
-`create → join → lock roster → select → vote → finalize → schedule → reveal → complete`
+* [x] Full 3–4 participant room lifecycle: `create → join → lock roster → select → vote → finalize → schedule → reveal → complete`
+
+Tests: `hardening.test.ts` (25 pure domain tests covering algorithm edge cases, security validation, spoiler safety, phase enforcement, and a full 3-participant E2E lifecycle), `hardening-concurrency.test.ts` (9 service-level tests for concurrent reveals, idempotency, authorization, and phase enforcement), `hardening-e2e.test.ts` (3 E2E tests including a full 4-participant lifecycle, all-shared-movie edge case, and single-participant room).
+
+**Milestone achieved:** algorithm edge cases, security boundaries, concurrency, and E2E lifecycle are covered. Lint, TypeScript, and all 148 tests pass.
 
 ---
 
