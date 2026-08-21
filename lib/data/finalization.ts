@@ -11,6 +11,7 @@ import {
   movieNeedsLetterboxdRatingLookup,
   type RoomMovieResultDraft,
 } from "@/lib/domain/finalization";
+import { scheduledRevealAtForFinalist } from "@/lib/domain/reveal";
 import {
   runSerializableRoomTransaction,
   transitionRoomPhaseInTransaction,
@@ -50,7 +51,11 @@ function isUniqueConstraintError(error: unknown) {
   );
 }
 
-function toResultWrite(roomId: string, draft: RoomMovieResultDraft) {
+function toResultWrite(
+  roomId: string,
+  draft: RoomMovieResultDraft,
+  finalizedAt: Date,
+) {
   return {
     roomId,
     roomMovieId: draft.roomMovieId,
@@ -60,6 +65,10 @@ function toResultWrite(roomId: string, draft: RoomMovieResultDraft) {
     tieBreakRandom: draft.tieBreakRandom,
     isFinalist: draft.isFinalist,
     finalOrder: draft.finalOrder,
+    scheduledRevealAt:
+      draft.isFinalist && draft.finalOrder != null
+        ? scheduledRevealAtForFinalist(finalizedAt, draft.finalOrder)
+        : null,
   };
 }
 
@@ -99,6 +108,8 @@ async function persistReadyResults(input: {
   roomId: string;
   drafts: RoomMovieResultDraft[];
 }): Promise<FinalizeRoomReady> {
+  const finalizedAt = new Date();
+
   try {
     return await runSerializableRoomTransaction(async (tx) => {
       const existingCount = await tx.roomMovieResult.count({
@@ -106,7 +117,9 @@ async function persistReadyResults(input: {
       });
       if (existingCount === 0 && input.drafts.length > 0) {
         await tx.roomMovieResult.createMany({
-          data: input.drafts.map((draft) => toResultWrite(input.roomId, draft)),
+          data: input.drafts.map((draft) =>
+            toResultWrite(input.roomId, draft, finalizedAt),
+          ),
         });
       }
 
@@ -120,10 +133,16 @@ async function persistReadyResults(input: {
       const finalistCount = await tx.roomMovieResult.count({
         where: { roomId: input.roomId, isFinalist: true },
       });
+      const completion = finalistCount === 0 && resultCount > 0
+        ? await transitionRoomPhaseInTransaction(tx, {
+            roomId: input.roomId,
+            targetPhase: RoomPhase.COMPLETE,
+          })
+        : null;
 
       return {
         status: "ready" as const,
-        phase: transition.phase,
+        phase: completion?.phase ?? transition.phase,
         alreadyFinalized: existingCount > 0 || !transition.transitioned,
         resultCount,
         finalistCount,

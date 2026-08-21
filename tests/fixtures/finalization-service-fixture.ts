@@ -47,6 +47,8 @@ type Result = {
   tieBreakRandom: number;
   isFinalist: boolean;
   finalOrder: number | null;
+  scheduledRevealAt: Date | null;
+  revealedAt: Date | null;
 };
 
 type MovieRatingLookup = {
@@ -182,11 +184,14 @@ const transactionClient = {
   },
   roomMovieResult: {
     count: async (query: {
-      where: { roomId: string; isFinalist?: boolean };
+      where: { roomId: string; isFinalist?: boolean; revealedAt?: null };
     }) =>
       [...results.values()].filter((result) => {
         if (result.roomId !== query.where.roomId) return false;
         if (query.where.isFinalist === true && !result.isFinalist) return false;
+        if (query.where.revealedAt === null && result.revealedAt !== null) {
+          return false;
+        }
         return true;
       }).length,
     createMany: async (query: { data: Result[] }) => {
@@ -197,7 +202,11 @@ const transactionClient = {
             "Unique constraint failed on room_movie_results",
           );
         }
-        results.set(key, { ...row });
+        results.set(key, {
+          ...row,
+          scheduledRevealAt: row.scheduledRevealAt ?? null,
+          revealedAt: row.revealedAt ?? null,
+        });
       }
       return { count: query.data.length };
     },

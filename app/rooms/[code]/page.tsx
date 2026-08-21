@@ -37,6 +37,12 @@ function taskCta(phase: RoomPhase, submitted: boolean) {
   if (phase === RoomPhase.FINALIZING) {
     return "Preparing results";
   }
+  if (phase === RoomPhase.REVEAL) {
+    return "Watch the reveal";
+  }
+  if (phase === RoomPhase.COMPLETE) {
+    return "View results";
+  }
   return null;
 }
 

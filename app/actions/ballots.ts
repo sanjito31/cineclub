@@ -14,6 +14,7 @@ import {
 import {
   roomFinalizePath,
   roomHomePath,
+  roomRevealPath,
   roomSelectionPath,
   roomVotingPath,
 } from "@/lib/domain/room-paths";
@@ -85,6 +86,7 @@ export async function submitBallotAction(
     revalidatePath(roomSelectionPath(code));
     revalidatePath(roomVotingPath(code));
     revalidatePath(roomFinalizePath(code));
+    revalidatePath(roomRevealPath(code));
     revalidatePath("/dashboard");
 
     return {

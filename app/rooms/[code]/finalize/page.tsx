@@ -3,7 +3,7 @@ import { loadMemberRoom } from "@/app/rooms/[code]/load-room";
 import { FinalizePoller } from "@/app/rooms/[code]/finalize-poller";
 import { RoomTaskHeader, RoomTaskIdentity } from "@/app/rooms/[code]/room-task-header";
 import { RoomPhase } from "@/app/generated/prisma/enums";
-import { roomHomePath, roomTaskPath } from "@/lib/domain/room-paths";
+import { roomRevealPath, roomTaskPath } from "@/lib/domain/room-paths";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export default async function RoomFinalizePage({
         <FinalizePoller
           code={room.code}
           endpoint={`/api/rooms/${encodeURIComponent(room.code)}/finalize`}
-          lobbyHref={roomHomePath(room.code)}
+          lobbyHref={roomRevealPath(room.code)}
         />
       </div>
     </main>

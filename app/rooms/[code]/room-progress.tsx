@@ -40,10 +40,10 @@ function phaseMessage({
   }
 
   if (phase === RoomPhase.REVEAL) {
-    return "Voting is complete. The room is ready for the reveal.";
+    return "The host is revealing the finalists one movie at a time. Future titles stay hidden.";
   }
 
-  return "This Cineclub room is complete.";
+  return "This Cineclub is complete. Open the reveal page to see the full lineup.";
 }
 
 export function RoomProgress({

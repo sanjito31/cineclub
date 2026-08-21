@@ -6,7 +6,7 @@ import {
   assertRoomPhaseTransition,
   canTransitionRoomPhase,
 } from "../lib/domain/room-lifecycle";
-import { roomHomePath, roomTaskPath } from "../lib/domain/room-paths";
+import { roomTaskPath } from "../lib/domain/room-paths";
 import {
   normalizeLetterboxdUsername,
   normalizeRoomCode,
@@ -34,6 +34,7 @@ test("Letterboxd usernames remain optional but reject unsafe values", () => {
 
 test("room lifecycle only permits the planned forward sequence", () => {
   assert.equal(canTransitionRoomPhase(RoomPhase.SELECTION, RoomPhase.VOTING), true);
+  assert.equal(canTransitionRoomPhase(RoomPhase.REVEAL, RoomPhase.COMPLETE), true);
   assert.equal(canTransitionRoomPhase(RoomPhase.VOTING, RoomPhase.REVEAL), false);
   assert.throws(() => {
     assertRoomPhaseTransition(RoomPhase.REVEAL, RoomPhase.VOTING);
@@ -62,5 +63,6 @@ test("room task paths keep selection and voting off the lobby", () => {
   assert.equal(roomTaskPath("ABC234", RoomPhase.SELECTION), "/rooms/ABC234/select");
   assert.equal(roomTaskPath("ABC234", RoomPhase.VOTING), "/rooms/ABC234/vote");
   assert.equal(roomTaskPath("ABC234", RoomPhase.FINALIZING), "/rooms/ABC234/finalize");
-  assert.equal(roomTaskPath("ABC234", RoomPhase.REVEAL), roomHomePath("ABC234"));
+  assert.equal(roomTaskPath("ABC234", RoomPhase.REVEAL), "/rooms/ABC234/reveal");
+  assert.equal(roomTaskPath("ABC234", RoomPhase.COMPLETE), "/rooms/ABC234/reveal");
 });

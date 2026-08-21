@@ -165,6 +165,14 @@ test("finalization persists immutable ranked results and advances to reveal", as
   assert.equal(rows[0]?.finalOrder, 2);
   assert.equal(rows[1]?.roomMovieId, "movie-2");
   assert.equal(rows[1]?.finalOrder, 1);
+  assert.ok(rows[1]?.scheduledRevealAt);
+  assert.ok(rows[0]?.scheduledRevealAt);
+  assert.equal(
+    (rows[0]?.scheduledRevealAt?.getTime() ?? 0)
+      - (rows[1]?.scheduledRevealAt?.getTime() ?? 0),
+    24 * 60 * 60 * 1000,
+  );
+  assert.equal(rows[0]?.revealedAt ?? null, null);
   assert.deepEqual(rows, fixture.resultRows());
 });
 

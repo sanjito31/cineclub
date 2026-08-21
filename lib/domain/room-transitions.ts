@@ -19,14 +19,16 @@ const maximumTransactionAttempts = 3;
 export type RoomTransitionTarget =
   | typeof RoomPhase.VOTING
   | typeof RoomPhase.FINALIZING
-  | typeof RoomPhase.REVEAL;
+  | typeof RoomPhase.REVEAL
+  | typeof RoomPhase.COMPLETE;
 
 export type RoomTransitionBlocker =
   | "ROSTER_UNLOCKED"
   | "NO_PARTICIPANTS"
   | "SELECTIONS_PENDING"
   | "BALLOTS_PENDING"
-  | "RESULTS_PENDING";
+  | "RESULTS_PENDING"
+  | "REVEALS_PENDING";
 
 export type RoomTransitionResult = {
   roomId: string;
@@ -117,12 +119,27 @@ async function getTransitionBlocker(
     return pendingBallotCount === 0 ? null : "BALLOTS_PENDING";
   }
 
-  const [movieCount, resultCount] = await Promise.all([
-    tx.roomMovie.count({ where: { roomId: room.id } }),
+  if (targetPhase === RoomPhase.REVEAL) {
+    const [movieCount, resultCount] = await Promise.all([
+      tx.roomMovie.count({ where: { roomId: room.id } }),
+      tx.roomMovieResult.count({ where: { roomId: room.id } }),
+    ]);
+
+    return resultCount === movieCount ? null : "RESULTS_PENDING";
+  }
+
+  const [resultCount, remainingRevealCount] = await Promise.all([
     tx.roomMovieResult.count({ where: { roomId: room.id } }),
+    tx.roomMovieResult.count({
+      where: { roomId: room.id, isFinalist: true, revealedAt: null },
+    }),
   ]);
 
-  return resultCount === movieCount ? null : "RESULTS_PENDING";
+  if (resultCount === 0) {
+    return "RESULTS_PENDING";
+  }
+
+  return remainingRevealCount === 0 ? null : "REVEALS_PENDING";
 }
 
 /**

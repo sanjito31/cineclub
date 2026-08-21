@@ -8,6 +8,7 @@ import { isFinalistOrdering, parseFinalistOrdering } from "@/lib/domain/finalist
 import {
   roomFinalizePath,
   roomHomePath,
+  roomRevealPath,
   roomSelectionPath,
   roomVotingPath,
 } from "@/lib/domain/room-paths";
@@ -31,6 +32,7 @@ function revalidateRoom(code: string) {
   revalidatePath(roomSelectionPath(code));
   revalidatePath(roomVotingPath(code));
   revalidatePath(roomFinalizePath(code));
+  revalidatePath(roomRevealPath(code));
   revalidatePath("/dashboard");
 }
 
