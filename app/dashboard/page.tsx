@@ -89,6 +89,7 @@ export default async function DashboardPage() {
         </Link>
         <nav className="dashboard-nav" aria-label="Dashboard navigation">
           <Link href="/profile">Profile</Link>
+          <Link href="/dashboard">Rooms</Link>
           <form action={signOut}>
             <button className="text-button" type="submit">Sign out</button>
           </form>

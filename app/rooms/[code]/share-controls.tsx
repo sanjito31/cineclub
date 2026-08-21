@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-type ShareStatus = "idle" | "copied" | "shared" | "error";
-
-function copyWithFallback(value: string) {
+function copyToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(value);
+  }
   const textarea = document.createElement("textarea");
   textarea.value = value;
   textarea.setAttribute("readonly", "");
@@ -13,87 +14,55 @@ function copyWithFallback(value: string) {
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
-  textarea.setSelectionRange(0, textarea.value.length);
-
   try {
-    return document.execCommand("copy");
+    if (!document.execCommand("copy")) throw new Error("copy failed");
   } finally {
     textarea.remove();
   }
+  return Promise.resolve();
 }
 
 export function ShareControls({
   code,
-  roomName,
 }: {
   code: string;
-  roomName: string;
+  roomName?: string;
 }) {
-  const [status, setStatus] = useState<ShareStatus>("idle");
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const codeTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const linkTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
   const shareUrl = typeof window === "undefined"
     ? `/join/${code}`
     : new URL(`/join/${code}`, window.location.origin).toString();
 
-  async function copyShareUrl() {
-    setStatus("idle");
-
+  async function handleCopyCode() {
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-      } else if (!copyWithFallback(shareUrl)) {
-        throw new Error("Copy command was unavailable.");
-      }
-      setStatus("copied");
-    } catch {
-      try {
-        if (!copyWithFallback(shareUrl)) {
-          throw new Error("Copy command failed.");
-        }
-        setStatus("copied");
-      } catch {
-        setStatus("error");
-      }
-    }
+      await copyToClipboard(code);
+      setCodeCopied(true);
+      if (codeTimer.current) clearTimeout(codeTimer.current);
+      codeTimer.current = setTimeout(() => setCodeCopied(false), 1500);
+    } catch {}
   }
 
-  async function shareRoom() {
-    if (!navigator.share) {
-      await copyShareUrl();
-      return;
-    }
-
-    setStatus("idle");
+  async function handleCopyLink() {
     try {
-      await navigator.share({
-        title: `Join ${roomName} on Cineclub`,
-        text: `Use room code ${code} to join our Cineclub room.`,
-        url: shareUrl,
-      });
-      setStatus("shared");
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      await copyShareUrl();
-    }
+      await copyToClipboard(shareUrl);
+      setLinkCopied(true);
+      if (linkTimer.current) clearTimeout(linkTimer.current);
+      linkTimer.current = setTimeout(() => setLinkCopied(false), 1500);
+    } catch {}
   }
-
-  const statusMessage = {
-    idle: "",
-    copied: "Invite link copied.",
-    shared: "Invite shared.",
-    error: "Couldn’t copy automatically. Select the link above and copy it.",
-  }[status];
 
   return (
     <div className="share-controls">
-      <button className="room-share-button" type="button" onClick={copyShareUrl}>
-        Copy link
+      <button className="room-share-button" type="button" onClick={handleCopyCode}>
+        {codeCopied ? "Copied!" : "Copy code"}
       </button>
-      <button className="room-share-button" type="button" onClick={shareRoom}>
-        Share
+      <button className="room-share-button" type="button" onClick={handleCopyLink}>
+        {linkCopied ? "Copied!" : "Copy link"}
       </button>
-      <span className={`share-status${status === "error" ? " is-error" : ""}`} aria-live="polite">
-        {statusMessage}
-      </span>
     </div>
   );
 }

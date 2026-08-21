@@ -213,6 +213,160 @@ export async function lockRoster(input: {
   });
 }
 
+export async function unlockRoster(input: {
+  userId: string;
+  code: string;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        code: true,
+        ownerId: true,
+        phase: true,
+        rosterLockedAt: true,
+        participants: { select: { userId: true } },
+      },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can unlock the roster.");
+    }
+
+    if (!room.participants.some((p) => p.userId === input.userId)) {
+      throw new AuthorizationError("You are not a member of this room.");
+    }
+
+    if (!room.rosterLockedAt) {
+      return { roomId: room.id, code: room.code, alreadyUnlocked: true };
+    }
+
+    assertRoomPhase(room.phase, RoomPhase.SELECTION);
+
+    await tx.room.update({
+      where: { id: room.id, phase: RoomPhase.SELECTION },
+      data: { rosterLockedAt: null },
+    });
+
+    return { roomId: room.id, code: room.code, alreadyUnlocked: false };
+  });
+}
+
+export async function updateRoomSettings(input: {
+  userId: string;
+  code: string;
+  maxParticipants?: number;
+  selectionsPerUser?: number;
+  requireParticipantCoverage?: boolean;
+  finalistOrdering?: FinalistOrdering;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        ownerId: true,
+        phase: true,
+        maxParticipants: true,
+        selectionsPerUser: true,
+        requireParticipantCoverage: true,
+        finalistOrdering: true,
+        participants: { select: { userId: true } },
+      },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can change room settings.");
+    }
+
+    if (!room.participants.some((p) => p.userId === input.userId)) {
+      throw new AuthorizationError("You are not a member of this room.");
+    }
+
+    if (room.phase !== RoomPhase.SELECTION) {
+      throw new DomainError("Room settings can only be changed during selection.");
+    }
+
+    const data: Record<string, unknown> = {};
+    if (input.maxParticipants !== undefined) {
+      if (input.maxParticipants < room.participants.length) {
+        throw new DomainError(
+          `Max participants cannot be less than the current count (${room.participants.length}).`,
+        );
+      }
+      data.maxParticipants = input.maxParticipants;
+    }
+    if (input.selectionsPerUser !== undefined) {
+      data.selectionsPerUser = input.selectionsPerUser;
+    }
+    if (input.requireParticipantCoverage !== undefined) {
+      data.requireParticipantCoverage = input.requireParticipantCoverage;
+    }
+    if (input.finalistOrdering !== undefined) {
+      data.finalistOrdering = input.finalistOrdering;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return { roomId: room.id, unchanged: true };
+    }
+
+    await tx.room.update({ where: { id: room.id }, data });
+    return { roomId: room.id, unchanged: false };
+  });
+}
+
+export async function removeParticipant(input: {
+  userId: string;
+  code: string;
+  participantId: string;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        ownerId: true,
+        phase: true,
+        participants: { select: { id: true, userId: true } },
+      },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can remove participants.");
+    }
+
+    const target = room.participants.find((p) => p.id === input.participantId);
+    if (!target) {
+      throw new DomainError("That participant is not in this room.");
+    }
+
+    if (target.userId === room.ownerId) {
+      throw new DomainError("The host cannot be removed from the room.");
+    }
+
+    if (room.phase !== RoomPhase.SELECTION) {
+      throw new DomainError("Participants can only be removed during selection.");
+    }
+
+    await tx.roomParticipant.delete({ where: { id: input.participantId } });
+
+    return { roomId: room.id, removedParticipantId: input.participantId };
+  });
+}
+
 export async function updateFinalistOrdering(input: {
   userId: string;
   code: string;
@@ -281,4 +435,52 @@ export async function updateFinalistOrdering(input: {
       unchanged: false,
     };
   });
+}
+
+export async function renameRoom(input: {
+  userId: string;
+  code: string;
+  name: string;
+}) {
+  const room = await prisma.room.findUnique({
+    where: { code: input.code },
+    select: { id: true, ownerId: true },
+  });
+
+  if (!room) {
+    throw new DomainError("That room does not exist.");
+  }
+
+  if (room.ownerId !== input.userId) {
+    throw new AuthorizationError("Only the room host can rename the room.");
+  }
+
+  await prisma.room.update({
+    where: { id: room.id },
+    data: { name: input.name },
+  });
+
+  return { roomId: room.id };
+}
+
+export async function deleteRoom(input: {
+  userId: string;
+  code: string;
+}) {
+  const room = await prisma.room.findUnique({
+    where: { code: input.code },
+    select: { id: true, ownerId: true },
+  });
+
+  if (!room) {
+    throw new DomainError("That room does not exist.");
+  }
+
+  if (room.ownerId !== input.userId) {
+    throw new AuthorizationError("Only the room host can delete the room.");
+  }
+
+  await prisma.room.delete({ where: { id: room.id } });
+
+  return { roomId: room.id };
 }

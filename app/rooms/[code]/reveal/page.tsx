@@ -16,7 +16,7 @@ export default async function RoomRevealPage({
   params: Promise<{ code: string }>;
 }) {
   const { code: rawCode } = await params;
-  const { user, room, isOwner } = await loadMemberRoom(rawCode);
+  const { user, room } = await loadMemberRoom(rawCode);
 
   if (room.phase !== RoomPhase.REVEAL && room.phase !== RoomPhase.COMPLETE) {
     redirect(roomTaskPath(room.code, room.phase));
@@ -27,7 +27,7 @@ export default async function RoomRevealPage({
   return (
     <main className="task-page">
       <RoomTaskHeader />
-      <RoomTaskIdentity name={reveal.name} code={reveal.code} isOwner={isOwner} />
+      <RoomTaskIdentity name={reveal.name} code={reveal.code} />
       <div className="task-main">
         <MovieReveal initial={reveal} revealAction={revealNextMovieAction} />
       </div>

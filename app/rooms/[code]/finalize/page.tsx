@@ -13,7 +13,7 @@ export default async function RoomFinalizePage({
   params: Promise<{ code: string }>;
 }) {
   const { code: rawCode } = await params;
-  const { room, isOwner } = await loadMemberRoom(rawCode);
+  const { room } = await loadMemberRoom(rawCode);
 
   if (room.phase !== RoomPhase.FINALIZING) {
     redirect(roomTaskPath(room.code, room.phase));
@@ -22,7 +22,7 @@ export default async function RoomFinalizePage({
   return (
     <main className="task-page">
       <RoomTaskHeader />
-      <RoomTaskIdentity name={room.name} code={room.code} isOwner={isOwner} />
+      <RoomTaskIdentity name={room.name} code={room.code} />
       <div className="task-main">
         <FinalizePoller
           code={room.code}

@@ -9,9 +9,13 @@ export function RoomTaskHeader() {
         <span className="brand-mark">C</span>
         <span>Cineclub</span>
       </Link>
-      <form action={signOut}>
-        <button className="text-button" type="submit">Sign out</button>
-      </form>
+      <nav className="dashboard-nav" aria-label="Navigation">
+        <Link href="/profile">Profile</Link>
+        <Link href="/dashboard">Rooms</Link>
+        <form action={signOut}>
+          <button className="text-button" type="submit">Sign out</button>
+        </form>
+      </nav>
     </header>
   );
 }
@@ -19,26 +23,20 @@ export function RoomTaskHeader() {
 export function RoomTaskIdentity({
   name,
   code,
-  isOwner,
 }: {
   name: string;
   code: string;
-  isOwner: boolean;
+  isOwner?: boolean;
 }) {
   return (
     <section className="task-identity" aria-label="Room">
-      <h1>{name}</h1>
-      <div className="task-identity-meta">
+      <Link className="back-link" href={roomHomePath(code)}>← Back to room</Link>
+      <div className="task-identity-row">
+        <h1>{name}</h1>
         <p className="task-room-code">
           <span>Room code</span>
           <strong>{code}</strong>
         </p>
-        <Link
-          className="button button-secondary button-compact"
-          href={roomHomePath(code)}
-        >
-          {isOwner ? "Host Controls" : "Room Info"}
-        </Link>
       </div>
     </section>
   );

@@ -33,7 +33,7 @@ export default async function RoomVotingPage({
   return (
     <main className="task-page">
       <RoomTaskHeader />
-      <RoomTaskIdentity name={voting.name} code={voting.code} isOwner={isOwner} />
+      <RoomTaskIdentity name={voting.name} code={voting.code} />
       <div className="task-main">
         {voting.alreadySubmitted ? (
           <section className="panel selection-complete-panel" aria-labelledby="voting-waiting-heading">
@@ -42,8 +42,7 @@ export default async function RoomVotingPage({
               <span className="eyebrow">Ballot submitted</span>
               <h2 id="voting-waiting-heading">Your ballot is locked in</h2>
               <p>
-                Waiting for remaining voters. Open{" "}
-                {isOwner ? "Host Controls" : "Room Info"} to follow room progress.
+                Waiting for remaining voters. Head back to the room to follow progress.
               </p>
             </div>
           </section>

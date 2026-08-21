@@ -14,7 +14,7 @@ export default async function RoomSelectionPage({
   params: Promise<{ code: string }>;
 }) {
   const { code: rawCode } = await params;
-  const { user, room, isOwner } = await loadMemberRoom(rawCode);
+  const { user, room } = await loadMemberRoom(rawCode);
 
   if (room.phase !== RoomPhase.SELECTION) {
     redirect(roomTaskPath(room.code, room.phase));
@@ -28,7 +28,7 @@ export default async function RoomSelectionPage({
   return (
     <main className="task-page">
       <RoomTaskHeader />
-      <RoomTaskIdentity name={room.name} code={room.code} isOwner={isOwner} />
+      <RoomTaskIdentity name={room.name} code={room.code} />
       <div className="task-main">
         {alreadySubmitted ? (
           <section className="panel selection-complete-panel" aria-labelledby="selection-waiting-heading">
@@ -37,8 +37,7 @@ export default async function RoomSelectionPage({
               <span className="eyebrow">Selections submitted</span>
               <h2 id="selection-waiting-heading">Your picks are locked in</h2>
               <p>
-                Waiting for the rest of the crew. Open{" "}
-                {isOwner ? "Host Controls" : "Room Info"} to follow room progress.
+                Waiting for the rest of the crew. Head back to the room to follow progress.
               </p>
             </div>
           </section>
