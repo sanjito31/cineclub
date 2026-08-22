@@ -303,13 +303,16 @@ export async function revealNextMovie(
       };
     }
 
+    const revealedAt = next.scheduledRevealAt && next.scheduledRevealAt > now
+      ? next.scheduledRevealAt
+      : now;
     const updated = await tx.roomMovieResult.updateMany({
       where: {
         roomId: room.id,
         roomMovieId: next.roomMovieId,
         revealedAt: null,
       },
-      data: { revealedAt: now },
+      data: { revealedAt },
     });
 
     if (updated.count === 0) {
