@@ -21,9 +21,12 @@ export function HostControlsCard({
   requireParticipantCoverage,
   currentOrdering,
   locked,
+  canRevert,
+  revertLabel,
   updateSettingsAction,
   renameAction,
   deleteAction,
+  revertAction,
 }: {
   code: string;
   roomName: string;
@@ -32,9 +35,12 @@ export function HostControlsCard({
   requireParticipantCoverage: boolean;
   currentOrdering: FinalistOrdering;
   locked: boolean;
+  canRevert: boolean;
+  revertLabel: string | null;
   updateSettingsAction: FormAction;
   renameAction: FormAction;
   deleteAction: FormAction;
+  revertAction: FormAction;
 }) {
   const [settingsState, doSettings, settingsPending] = useActionState(
     updateSettingsAction,
@@ -48,7 +54,12 @@ export function HostControlsCard({
     deleteAction,
     { status: "idle" } satisfies ActionState,
   );
+  const [revertState, doRevert, revertPending] = useActionState(
+    revertAction,
+    { status: "idle" } satisfies ActionState,
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
 
   return (
     <section className="panel host-settings-card">
@@ -166,6 +177,44 @@ export function HostControlsCard({
         <div className="danger-zone-header">
           <strong>Danger zone</strong>
         </div>
+        {canRevert ? (
+          confirmRevert ? (
+            <div className="danger-zone-confirm">
+              <p>This will revert the room to {revertLabel?.toLowerCase()}. All progress from the current phase will be lost.</p>
+              <div className="danger-zone-actions">
+                <form action={doRevert}>
+                  <input name="code" type="hidden" value={code} />
+                  <button
+                    className="button button-danger button-small"
+                    disabled={revertPending}
+                    type="submit"
+                  >
+                    {revertPending ? "Reverting…" : `Yes, revert to ${revertLabel?.toLowerCase()}`}
+                  </button>
+                </form>
+                <button
+                  className="button button-secondary button-small"
+                  onClick={() => setConfirmRevert(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+              <ActionMessage status={revertState.status} message={revertState.message} />
+            </div>
+          ) : (
+            <div className="setting-row">
+              <span className="danger-zone-label">Revert room to {revertLabel?.toLowerCase()}</span>
+              <button
+                className="button button-danger-outline button-xs"
+                onClick={() => setConfirmRevert(true)}
+                type="button"
+              >
+                Revert phase
+              </button>
+            </div>
+          )
+        ) : null}
         {confirmDelete ? (
           <div className="danger-zone-confirm">
             <p>This will permanently delete the room, all nominations, votes, and results. This cannot be undone.</p>

@@ -6,7 +6,7 @@ import { FinalistOrdering, RoomPhase } from "@/app/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import { AuthorizationError, DomainError } from "@/lib/auth/errors";
 import { requireProfile } from "@/lib/data/profiles";
-import { assertRoomPhase } from "@/lib/domain/room-lifecycle";
+import { assertRoomPhase, revertTarget } from "@/lib/domain/room-lifecycle";
 import {
   runSerializableRoomTransaction,
   transitionRoomPhaseInTransaction,
@@ -483,4 +483,153 @@ export async function deleteRoom(input: {
   await prisma.room.delete({ where: { id: room.id } });
 
   return { roomId: room.id };
+}
+
+export async function withdrawSelections(input: {
+  userId: string;
+  code: string;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: { id: true, phase: true },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    assertRoomPhase(room.phase, RoomPhase.SELECTION);
+
+    const participant = await tx.roomParticipant.findUnique({
+      where: { roomId_userId: { roomId: room.id, userId: input.userId } },
+      select: { id: true, selectionSubmittedAt: true },
+    });
+
+    if (!participant) {
+      throw new DomainError("You are not a member of this room.");
+    }
+
+    if (!participant.selectionSubmittedAt) {
+      throw new DomainError("You have not submitted selections yet.");
+    }
+
+    await tx.nomination.deleteMany({
+      where: { roomId: room.id, participantId: participant.id },
+    });
+
+    await tx.roomParticipant.update({
+      where: { id: participant.id },
+      data: { selectionSubmittedAt: null },
+    });
+
+    return { roomId: room.id, participantId: participant.id };
+  });
+}
+
+export async function withdrawBallot(input: {
+  userId: string;
+  code: string;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: { id: true, phase: true },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    assertRoomPhase(room.phase, RoomPhase.VOTING);
+
+    const participant = await tx.roomParticipant.findUnique({
+      where: { roomId_userId: { roomId: room.id, userId: input.userId } },
+      select: { id: true, votingSubmittedAt: true },
+    });
+
+    if (!participant) {
+      throw new DomainError("You are not a member of this room.");
+    }
+
+    if (!participant.votingSubmittedAt) {
+      throw new DomainError("You have not submitted a ballot yet.");
+    }
+
+    await tx.ballot.deleteMany({
+      where: { roomId: room.id, participantId: participant.id },
+    });
+
+    await tx.roomParticipant.update({
+      where: { id: participant.id },
+      data: { votingSubmittedAt: null },
+    });
+
+    return { roomId: room.id, participantId: participant.id };
+  });
+}
+
+export async function revertRoomPhase(input: {
+  userId: string;
+  code: string;
+}) {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        ownerId: true,
+        phase: true,
+        participants: { select: { userId: true } },
+      },
+    });
+
+    if (!room) {
+      throw new DomainError("That room does not exist.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can revert the phase.");
+    }
+
+    if (!room.participants.some((p) => p.userId === input.userId)) {
+      throw new AuthorizationError("You are not a member of this room.");
+    }
+
+    const target = revertTarget(room.phase);
+    if (!target) {
+      throw new DomainError("This phase cannot be reverted.");
+    }
+
+    if (target === RoomPhase.SELECTION) {
+      await tx.ballot.deleteMany({ where: { roomId: room.id } });
+      await tx.roomParticipant.updateMany({
+        where: { roomId: room.id },
+        data: { votingSubmittedAt: null },
+      });
+    }
+
+    if (target === RoomPhase.VOTING) {
+      await tx.roomMovieResult.deleteMany({ where: { roomId: room.id } });
+      await tx.ballot.deleteMany({ where: { roomId: room.id } });
+      await tx.roomParticipant.updateMany({
+        where: { roomId: room.id },
+        data: { votingSubmittedAt: null },
+      });
+    }
+
+    await tx.room.update({
+      where: { id: room.id },
+      data: {
+        phase: target,
+        finalizedAt: null,
+      },
+    });
+
+    return {
+      roomId: room.id,
+      previousPhase: room.phase,
+      phase: target,
+    };
+  });
 }

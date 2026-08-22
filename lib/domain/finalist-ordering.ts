@@ -3,7 +3,7 @@ import { DomainError } from "@/lib/auth/errors";
 
 export { FinalistOrdering };
 
-export const DEFAULT_FINALIST_ORDERING = FinalistOrdering.RANKED_CHOICE;
+export const DEFAULT_FINALIST_ORDERING = FinalistOrdering.RANKED_CHOICE_FORWARD;
 
 export type FinalistForOrdering = {
   roomMovieId: string;
@@ -23,11 +23,22 @@ function byMovieId(left: FinalistForOrdering, right: FinalistForOrdering) {
   return left.roomMovieId.localeCompare(right.roomMovieId);
 }
 
-function orderByRankedChoice(movies: readonly FinalistForOrdering[]) {
+function orderByReverseRankedChoice(movies: readonly FinalistForOrdering[]) {
   return [...movies]
     .sort((left, right) => {
       if (left.aggregateRank !== right.aggregateRank) {
         return right.aggregateRank - left.aggregateRank;
+      }
+      return byMovieId(left, right);
+    })
+    .map((movie) => movie.roomMovieId);
+}
+
+function orderByRankedChoiceForward(movies: readonly FinalistForOrdering[]) {
+  return [...movies]
+    .sort((left, right) => {
+      if (left.aggregateRank !== right.aggregateRank) {
+        return left.aggregateRank - right.aggregateRank;
       }
       return byMovieId(left, right);
     })
@@ -48,13 +59,21 @@ function orderByRandom(movies: readonly FinalistForOrdering[]) {
 export const finalistOrderingStrategies: Readonly<
   Record<FinalistOrdering, FinalistOrderingStrategy>
 > = {
+  [FinalistOrdering.RANKED_CHOICE_FORWARD]: {
+    id: FinalistOrdering.RANKED_CHOICE_FORWARD,
+    label: "Ranked choice",
+    shortLabel: "Winner first",
+    description:
+      "Reveal follows the vote ranking. The highest-ranked finalist is first.",
+    orderFinalists: orderByRankedChoiceForward,
+  },
   [FinalistOrdering.RANKED_CHOICE]: {
     id: FinalistOrdering.RANKED_CHOICE,
-    label: "Ranked choice",
-    shortLabel: "Vote ranking, winner last",
+    label: "Reverse ranked choice",
+    shortLabel: "Winner last",
     description:
-      "Reveal follows the vote ranking. The lowest-ranked finalist is first and the winner is last.",
-    orderFinalists: orderByRankedChoice,
+      "Reveal follows the vote ranking in reverse. The lowest-ranked finalist is first and the winner is last.",
+    orderFinalists: orderByReverseRankedChoice,
   },
   [FinalistOrdering.RANDOM]: {
     id: FinalistOrdering.RANDOM,

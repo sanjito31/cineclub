@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { RoomPhase } from "@/app/generated/prisma/enums";
 import type { ActionState } from "@/app/actions/types";
 import { requireUser } from "@/lib/auth/session";
-import { revealNextMovie } from "@/lib/data/reveal";
+import { revealAllMovies, revealNextMovie } from "@/lib/data/reveal";
 import {
   RevealError,
   type RevealErrorCode,
@@ -93,6 +93,41 @@ export async function revealNextMovieAction(
       errorCode: error instanceof RevealError ? error.code : undefined,
       message:
         error instanceof Error ? error.message : "Unable to reveal the next movie.",
+    };
+  }
+}
+
+export async function skipRevealAction(
+  _previousState: RevealNextActionState,
+  formData: FormData,
+): Promise<RevealNextActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+  if (!code) {
+    return {
+      status: "error",
+      errorCode: "INVALID_ROOM_CODE",
+      message: "Enter a valid six-character room code.",
+    };
+  }
+
+  try {
+    const user = await requireUser();
+    const result = await revealAllMovies({ userId: user.id, code });
+
+    revalidateReveal(code);
+
+    return {
+      status: "success",
+      phase: result.phase,
+      remainingCount: 0,
+      message: "Every finalist has been revealed. This Cineclub is complete.",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      errorCode: error instanceof RevealError ? error.code : undefined,
+      message:
+        error instanceof Error ? error.message : "Unable to skip the reveal.",
     };
   }
 }

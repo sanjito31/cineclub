@@ -387,6 +387,70 @@ export async function revealNextMovie(
   });
 }
 
+export async function revealAllMovies(input: {
+  userId: string;
+  code: string;
+}): Promise<RevealNextComplete> {
+  return runSerializableRoomTransaction(async (tx) => {
+    const room = await tx.room.findUnique({
+      where: { code: input.code },
+      select: {
+        id: true,
+        phase: true,
+        ownerId: true,
+        participants: { select: { userId: true } },
+      },
+    });
+
+    if (!room) {
+      throw new RevealError("ROOM_NOT_FOUND", "That room does not exist.");
+    }
+
+    if (!room.participants.some((p) => p.userId === input.userId)) {
+      throw new AuthorizationError("You are not a member of this room.");
+    }
+
+    if (room.ownerId !== input.userId) {
+      throw new AuthorizationError("Only the room host can skip the reveal.");
+    }
+
+    if (room.phase === RoomPhase.COMPLETE) {
+      return { status: "complete" as const, phase: RoomPhase.COMPLETE, remainingCount: 0 as const };
+    }
+
+    if (room.phase !== RoomPhase.REVEAL) {
+      throw new RevealError("WRONG_PHASE", "Movies can only be revealed after finalization.");
+    }
+
+    const unrevealed = await tx.roomMovieResult.findMany({
+      where: { roomId: room.id, isFinalist: true, revealedAt: null },
+      select: { roomMovieId: true, scheduledRevealAt: true },
+    });
+
+    const now = new Date();
+    for (const row of unrevealed) {
+      const revealedAt = row.scheduledRevealAt && row.scheduledRevealAt > now
+        ? row.scheduledRevealAt
+        : now;
+      await tx.roomMovieResult.update({
+        where: { roomId_roomMovieId: { roomId: room.id, roomMovieId: row.roomMovieId } },
+        data: { revealedAt },
+      });
+    }
+
+    const completion = await transitionRoomPhaseInTransaction(tx, {
+      roomId: room.id,
+      targetPhase: RoomPhase.COMPLETE,
+    });
+
+    if (completion.phase !== RoomPhase.COMPLETE) {
+      throw new RevealError("NOTHING_TO_REVEAL", "Unable to complete the reveal.");
+    }
+
+    return { status: "complete" as const, phase: RoomPhase.COMPLETE, remainingCount: 0 as const };
+  });
+}
+
 function isRevealOnCooldownForAction(
   cooldownEndsAt: Date | null,
   now: Date,

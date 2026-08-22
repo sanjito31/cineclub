@@ -72,6 +72,46 @@ export type VotingBallotContext = {
   alreadySubmitted: boolean;
 };
 
+export type SubmittedBallotRankView = {
+  rank: number;
+  title: string;
+  releaseYear: number | null;
+  posterPath: string | null;
+};
+
+export async function getSubmittedBallot(
+  roomId: string,
+  participantId: string,
+): Promise<SubmittedBallotRankView[]> {
+  const ballot = await prisma.ballot.findUnique({
+    where: { roomId_participantId: { roomId, participantId } },
+    select: {
+      ranks: {
+        orderBy: { rank: "asc" },
+        select: {
+          rank: true,
+          roomMovie: {
+            select: {
+              title: true,
+              releaseYear: true,
+              posterPath: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!ballot) return [];
+
+  return ballot.ranks.map((r) => ({
+    rank: r.rank,
+    title: r.roomMovie.title,
+    releaseYear: r.roomMovie.releaseYear,
+    posterPath: r.roomMovie.posterPath,
+  }));
+}
+
 function isUniqueConstraintError(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&

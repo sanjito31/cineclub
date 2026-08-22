@@ -8,6 +8,7 @@ import {
   submitNominations,
   type SubmittedNomination,
 } from "@/lib/data/nominations";
+import { withdrawSelections } from "@/lib/domain/rooms";
 import {
   NominationSubmissionError,
   SelectionValidationError,
@@ -16,6 +17,7 @@ import {
   type SelectionValidationErrorCode,
 } from "@/lib/domain/nominations";
 import { roomHomePath, roomSelectionPath, roomVotingPath } from "@/lib/domain/room-paths";
+import { DomainError } from "@/lib/auth/errors";
 import { normalizeRoomCode, readString } from "@/lib/validation/shared";
 
 export type SubmitNominationsActionResult = {
@@ -114,6 +116,35 @@ export async function submitNominationsAction(
         error instanceof Error
           ? error.message
           : "Unable to submit movie selections.",
+    };
+  }
+}
+
+export async function withdrawSelectionsAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+  if (!code) {
+    return { status: "error", message: "Invalid room code." };
+  }
+
+  try {
+    const user = await requireUser();
+    await withdrawSelections({ userId: user.id, code });
+
+    revalidatePath(roomHomePath(code));
+    revalidatePath(roomSelectionPath(code));
+    revalidatePath("/dashboard");
+
+    return { status: "success", message: "Selections withdrawn. You can now pick again." };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof DomainError || error instanceof Error
+          ? error.message
+          : "Unable to withdraw selections.",
     };
   }
 }

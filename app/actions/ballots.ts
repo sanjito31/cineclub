@@ -5,6 +5,8 @@ import type { RoomPhase } from "@/app/generated/prisma/enums";
 import type { ActionState } from "@/app/actions/types";
 import { requireUser } from "@/lib/auth/session";
 import { submitBallot } from "@/lib/data/ballots";
+import { withdrawBallot } from "@/lib/domain/rooms";
+import { DomainError } from "@/lib/auth/errors";
 import {
   BallotSubmissionError,
   BallotValidationError,
@@ -116,6 +118,35 @@ export async function submitBallotAction(
         error instanceof Error
           ? error.message
           : "Unable to submit your ballot.",
+    };
+  }
+}
+
+export async function withdrawBallotAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+  if (!code) {
+    return { status: "error", message: "Invalid room code." };
+  }
+
+  try {
+    const user = await requireUser();
+    await withdrawBallot({ userId: user.id, code });
+
+    revalidatePath(roomHomePath(code));
+    revalidatePath(roomVotingPath(code));
+    revalidatePath("/dashboard");
+
+    return { status: "success", message: "Ballot withdrawn. You can now vote again." };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof DomainError || error instanceof Error
+          ? error.message
+          : "Unable to withdraw your ballot.",
     };
   }
 }

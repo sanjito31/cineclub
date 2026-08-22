@@ -105,14 +105,20 @@ function RevealedMovieCard({
 export function MovieReveal({
   initial,
   revealAction,
+  skipRevealAction,
 }: {
   initial: RevealClientContext;
   revealAction: RevealNextAction;
+  skipRevealAction: RevealNextAction;
 }) {
   const [warningForCount, setWarningForCount] = useState<number | null>(null);
   const [dismissedCooldown, setDismissedCooldown] = useState(false);
   const [understoodEarly, setUnderstoodEarly] = useState(false);
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const [state, action] = useActionState(revealAction, {
+    status: "idle",
+  } satisfies RevealNextActionState);
+  const [skipState, doSkip, skipPending] = useActionState(skipRevealAction, {
     status: "idle",
   } satisfies RevealNextActionState);
   const latest = initial.revealed.at(-1) ?? null;
@@ -246,6 +252,46 @@ export function MovieReveal({
             )}
             <ActionMessage status={state.status} message={state.message} />
           </form>
+        ) : null}
+
+        {initial.isOwner && !completed ? (
+          <div className="reveal-skip-section">
+            {confirmSkip ? (
+              <div className="reveal-early-warning" role="alertdialog" aria-labelledby="skip-reveal-title">
+                <span className="eyebrow">Skip reveal</span>
+                <h3 id="skip-reveal-title">Reveal all remaining movies at once?</h3>
+                <p>This will uncover every sealed movie immediately. The group will see the full list without the one-at-a-time pacing.</p>
+                <div className="reveal-early-actions">
+                  <form action={doSkip}>
+                    <input name="code" type="hidden" value={initial.code} />
+                    <button
+                      className="button button-danger button-small"
+                      disabled={skipPending}
+                      type="submit"
+                    >
+                      {skipPending ? "Revealing all…" : "Yes, reveal everything"}
+                    </button>
+                  </form>
+                  <button
+                    className="button button-secondary button-small"
+                    type="button"
+                    onClick={() => setConfirmSkip(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <ActionMessage status={skipState.status} message={skipState.message} />
+              </div>
+            ) : (
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                onClick={() => setConfirmSkip(true)}
+              >
+                Skip reveal
+              </button>
+            )}
+          </div>
         ) : null}
 
         {!initial.isOwner && !completed ? (

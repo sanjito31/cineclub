@@ -5,6 +5,7 @@ import {
   lockRoomRosterAction,
   removeParticipantAction,
   renameRoomAction,
+  revertRoomPhaseAction,
   unlockRoomRosterAction,
   updateRoomSettingsAction,
 } from "@/app/actions/rooms";
@@ -16,6 +17,7 @@ import { RoomProgress } from "@/app/rooms/[code]/room-progress";
 import { ShareControls } from "@/app/rooms/[code]/share-controls";
 import { RoomPhase } from "@/app/generated/prisma/enums";
 import { finalistOrderingLabel } from "@/lib/domain/finalist-ordering";
+import { canRevertRoomPhase, revertTarget, roomPhaseLabels } from "@/lib/domain/room-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -139,9 +141,12 @@ export default async function RoomPage({
               requireParticipantCoverage={room.requireParticipantCoverage}
               currentOrdering={room.finalistOrdering}
               locked={room.phase !== RoomPhase.SELECTION}
+              canRevert={canRevertRoomPhase(room.phase)}
+              revertLabel={revertTarget(room.phase) ? roomPhaseLabels[revertTarget(room.phase)!] : null}
               updateSettingsAction={updateRoomSettingsAction}
               renameAction={renameRoomAction}
               deleteAction={deleteRoomAction}
+              revertAction={revertRoomPhaseAction}
             />
           ) : null}
         </div>

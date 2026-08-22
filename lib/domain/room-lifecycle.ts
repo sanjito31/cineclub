@@ -9,6 +9,14 @@ const transitions: Readonly<Record<RoomPhase, readonly RoomPhase[]>> = {
   [RoomPhase.COMPLETE]: [],
 };
 
+const reversions: Readonly<Record<RoomPhase, RoomPhase | null>> = {
+  [RoomPhase.SELECTION]: null,
+  [RoomPhase.VOTING]: RoomPhase.SELECTION,
+  [RoomPhase.FINALIZING]: RoomPhase.VOTING,
+  [RoomPhase.REVEAL]: RoomPhase.VOTING,
+  [RoomPhase.COMPLETE]: null,
+};
+
 export function isRoomPhase(value: string): value is RoomPhase {
   return Object.values(RoomPhase).includes(value as RoomPhase);
 }
@@ -27,6 +35,14 @@ export function assertRoomPhaseTransition(from: RoomPhase, to: RoomPhase) {
   if (!canTransitionRoomPhase(from, to)) {
     throw new DomainError(`Room cannot move from ${from} to ${to}.`);
   }
+}
+
+export function canRevertRoomPhase(phase: RoomPhase) {
+  return reversions[phase] !== null;
+}
+
+export function revertTarget(phase: RoomPhase): RoomPhase | null {
+  return reversions[phase];
 }
 
 export const roomPhaseLabels: Readonly<Record<RoomPhase, string>> = {

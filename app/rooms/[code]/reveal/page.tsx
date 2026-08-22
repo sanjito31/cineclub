@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { revealNextMovieAction } from "@/app/actions/reveal";
+import { revealNextMovieAction, skipRevealAction } from "@/app/actions/reveal";
 import { loadMemberRoom } from "@/app/rooms/[code]/load-room";
 import { MovieReveal } from "@/app/rooms/[code]/movie-reveal";
 import { toRevealClientContext } from "@/app/rooms/[code]/reveal-contracts";
@@ -29,7 +29,7 @@ export default async function RoomRevealPage({
       <RoomTaskHeader />
       <RoomTaskIdentity name={reveal.name} code={reveal.code} />
       <div className="task-main">
-        <MovieReveal initial={reveal} revealAction={revealNextMovieAction} />
+        <MovieReveal initial={reveal} revealAction={revealNextMovieAction} skipRevealAction={skipRevealAction} />
       </div>
     </main>
   );

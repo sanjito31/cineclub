@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
-import { createRoom, deleteRoom, joinRoom, lockRoster, removeParticipant, renameRoom, unlockRoster, updateFinalistOrdering, updateRoomSettings } from "@/lib/domain/rooms";
+import { createRoom, deleteRoom, joinRoom, lockRoster, removeParticipant, renameRoom, revertRoomPhase, unlockRoster, updateFinalistOrdering, updateRoomSettings } from "@/lib/domain/rooms";
 import { isFinalistOrdering, parseFinalistOrdering } from "@/lib/domain/finalist-ordering";
 import {
   roomFinalizePath,
@@ -334,4 +334,32 @@ export async function deleteRoomAction(
   }
 
   redirect("/dashboard");
+}
+
+export async function revertRoomPhaseAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const code = normalizeRoomCode(readString(formData.get("code")));
+
+  if (!code) {
+    return { status: "error", message: "Invalid room code." };
+  }
+
+  try {
+    const user = await requireUser();
+    const result = await revertRoomPhase({ userId: user.id, code });
+
+    revalidateRoom(code);
+
+    return {
+      status: "success",
+      message: `Room reverted from ${result.previousPhase.toLowerCase()} to ${result.phase.toLowerCase()}.`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Unable to revert the room phase.",
+    };
+  }
 }

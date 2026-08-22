@@ -209,7 +209,7 @@ function RankList({
               <span aria-hidden="true">⠿</span>
             </span>
             <span className="voting-rank-index">{rank}</span>
-            <VotingMovieIdentity movie={movie} showNominators />
+            <VotingMovieIdentity movie={movie} />
             <div className="voting-rank-actions">
               <button
                 className="button button-secondary button-compact"
@@ -399,8 +399,11 @@ export function MovieVoting({
                 ? `Every participant is represented. Rank the selected movies below.`
                 : `Choose movies until all ${participantCount} participants are represented.`}
             </p>
-            {nominationGroups.map((group) => {
+            {nominationGroups.map((group, groupIndex) => {
               const headingId = `voting-group-${group.participantId}`;
+              const groupLabel = group.isCurrentUser
+                ? "Your nominations"
+                : `Participant ${groupIndex + 1}`;
               return (
                 <section
                   className={`voting-nomination-group${group.covered ? " is-covered" : ""}`}
@@ -408,7 +411,7 @@ export function MovieVoting({
                   aria-labelledby={headingId}
                 >
                   <h4 className="voting-nomination-heading" id={headingId}>
-                    <span>{group.displayName}</span>
+                    <span>{groupLabel}</span>
                     {group.covered ? (
                       <span className="voting-nomination-check" aria-label="Coverage satisfied">
                         ✓
@@ -455,9 +458,7 @@ export function MovieVoting({
             })}
             {missingCoverage.length > 0 ? (
               <p className="selection-submit-hint is-error">
-                Still missing {missingCoverage.map((participant) => (
-                  participant.isCurrentUser ? "you" : participant.displayName
-                )).join(", ")}.
+                Still missing coverage for {missingCoverage.length} {missingCoverage.length === 1 ? "participant" : "participants"}.
               </p>
             ) : null}
           </div>

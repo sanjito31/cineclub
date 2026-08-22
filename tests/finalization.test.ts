@@ -199,10 +199,11 @@ test("random ordering uses persisted tie-break values and stays stable", () => {
 test("ordering strategies are listed so later options can be registered", () => {
   const ids = listFinalistOrderingStrategies().map((strategy) => strategy.id);
   assert.deepEqual(ids, [
+    FinalistOrdering.RANKED_CHOICE_FORWARD,
     FinalistOrdering.RANKED_CHOICE,
     FinalistOrdering.RANDOM,
   ]);
-  assert.equal(parseFinalistOrdering("nope"), FinalistOrdering.RANKED_CHOICE);
+  assert.equal(parseFinalistOrdering("nope"), FinalistOrdering.RANKED_CHOICE_FORWARD);
 });
 
 test("the same ballots and randoms always produce the same persisted draft", () => {

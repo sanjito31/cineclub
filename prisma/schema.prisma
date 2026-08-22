@@ -26,6 +26,7 @@ enum RoomPhase {
 
 enum FinalistOrdering {
   RANKED_CHOICE
+  RANKED_CHOICE_FORWARD
   RANDOM
 
   @@map("finalist_ordering")
@@ -54,7 +55,7 @@ model Room {
   maxParticipants            Int               @map("max_participants") @db.SmallInt
   selectionsPerUser          Int               @map("selections_per_user") @db.SmallInt
   requireParticipantCoverage Boolean           @default(true) @map("require_participant_coverage")
-  finalistOrdering           FinalistOrdering  @default(RANKED_CHOICE) @map("finalist_ordering")
+  finalistOrdering           FinalistOrdering  @default(RANKED_CHOICE_FORWARD) @map("finalist_ordering")
   rosterLockedAt             DateTime?         @map("roster_locked_at") @db.Timestamptz(6)
   joinDeadline               DateTime?         @map("join_deadline") @db.Timestamptz(6)
   selectionDeadline          DateTime?         @map("selection_deadline") @db.Timestamptz(6)

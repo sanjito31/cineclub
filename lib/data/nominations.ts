@@ -39,6 +39,40 @@ export type SubmitNominationsResult = {
   duplicates: NominationDuplicateReport;
 };
 
+export type SubmittedNominationView = {
+  slotIndex: number;
+  title: string;
+  releaseYear: number | null;
+  posterPath: string | null;
+};
+
+export async function getSubmittedNominations(
+  roomId: string,
+  participantId: string,
+): Promise<SubmittedNominationView[]> {
+  const nominations = await prisma.nomination.findMany({
+    where: { roomId, participantId },
+    orderBy: { slotIndex: "asc" },
+    select: {
+      slotIndex: true,
+      roomMovie: {
+        select: {
+          title: true,
+          releaseYear: true,
+          posterPath: true,
+        },
+      },
+    },
+  });
+
+  return nominations.map((n) => ({
+    slotIndex: n.slotIndex,
+    title: n.roomMovie.title,
+    releaseYear: n.roomMovie.releaseYear,
+    posterPath: n.roomMovie.posterPath,
+  }));
+}
+
 export type RoomMovieNominationSummary = {
   tmdbId: number;
   letterboxdRating: number | null;

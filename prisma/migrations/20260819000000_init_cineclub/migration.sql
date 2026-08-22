@@ -174,8 +174,16 @@ CREATE UNIQUE INDEX "room_movie_results_room_id_aggregate_rank_key" ON "cineclub
 -- CreateIndex
 CREATE UNIQUE INDEX "room_movie_results_room_id_final_order_key" ON "cineclub"."room_movie_results"("room_id", "final_order");
 
--- AddForeignKey
-ALTER TABLE "cineclub"."profiles" ADD CONSTRAINT "profiles_id_fkey" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
+-- AddForeignKey (auth.users is Supabase-managed; skip in shadow DB)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'auth') THEN
+    ALTER TABLE "cineclub"."profiles"
+      ADD CONSTRAINT "profiles_id_fkey"
+      FOREIGN KEY ("id") REFERENCES "auth"."users"("id")
+      ON DELETE CASCADE ON UPDATE NO ACTION;
+  END IF;
+END $$;
 
 -- AddForeignKey
 ALTER TABLE "cineclub"."rooms" ADD CONSTRAINT "rooms_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "cineclub"."profiles"("id") ON DELETE CASCADE ON UPDATE NO ACTION;

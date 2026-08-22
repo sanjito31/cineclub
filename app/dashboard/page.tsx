@@ -5,7 +5,7 @@ import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { getDashboardRooms } from "@/lib/data/rooms";
 import { roomPhaseLabels } from "@/lib/domain/room-lifecycle";
-import { roomTaskPath } from "@/lib/domain/room-paths";
+import { roomHomePath } from "@/lib/domain/room-paths";
 import { DashboardTabs } from "./dashboard-tabs";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,7 @@ function RoomCard({ room, hosting = false }: { room: DashboardRoom; hosting?: bo
   return (
     <Link
       className={`dashboard-room-card${hosting ? " is-hosting" : ""}`}
-      href={roomTaskPath(room.code, room.phase)}
+      href={roomHomePath(room.code)}
     >
       <span className="dashboard-room-card-topline">
         <span className="dashboard-room-card-pills">

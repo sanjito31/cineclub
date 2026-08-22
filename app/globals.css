@@ -334,6 +334,15 @@ button { color: inherit; }
 .selection-complete-panel { display: flex; align-items: center; gap: 18px; }
 .selection-complete-mark { width: 48px; height: 48px; flex: none; border-radius: 50%; display: grid; place-items: center; color: white; background: var(--green); font-size: 22px; font-weight: 800; }
 .selection-complete-panel .selection-post-submit-warning { margin-top: 9px; color: #6d5011; }
+.submission-review-list { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 8px; }
+.submission-review-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--surface); }
+.submission-review-rank { width: 24px; flex: none; font: 700 15px/1 Georgia, serif; color: var(--muted); text-align: center; }
+.submission-review-poster { width: 40px; height: 60px; flex: none; border-radius: 4px; object-fit: cover; }
+.submission-review-poster.is-missing { display: grid; place-items: center; background: var(--line); color: var(--muted); font-size: 16px; font-weight: 700; }
+.submission-review-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.submission-review-copy strong { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.submission-review-copy span { font-size: 12px; color: var(--muted); }
+.withdraw-control { margin-top: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .selection-panel button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
 .voting-minimum { margin: -8px 0 8px; color: var(--muted); font-size: 13px; line-height: 1.55; }
@@ -530,6 +539,7 @@ button { color: inherit; }
 .reveal-early-warning p { margin: 0; color: #8b2414; font-size: 13px; line-height: 1.55; }
 .reveal-early-confirm { background: #fff7f4; border-color: #e3b2a6; }
 .reveal-early-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.reveal-skip-section { margin-top: 8px; }
 .reveal-history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
 .reveal-movie-card .voting-card-letterboxd { z-index: 1; }
 
