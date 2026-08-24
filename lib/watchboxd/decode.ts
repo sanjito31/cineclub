@@ -42,6 +42,7 @@ export type WatchboxdCollectionPage<T> = {
 
 export type WatchboxdOverlapFilm = WatchboxdMovie & {
   overlapCount: number | null;
+  presentFor: WatchboxdListUser[];
 };
 
 export type WatchboxdOverlapPage = {
@@ -269,12 +270,20 @@ export function decodeWatchboxdOverlapFilm(value: unknown): WatchboxdOverlapFilm
   if (!movie) return null;
 
   const overlapCount = optionalFiniteNumber(record?.overlapCount);
+  const presentFor = Array.isArray(record?.presentFor)
+    ? record.presentFor.flatMap((user: unknown) => {
+        const decoded = decodeWatchboxdListUser(user);
+        return decoded ? [decoded] : [];
+      })
+    : [];
+
   return {
     ...movie,
     overlapCount:
       overlapCount !== null && Number.isInteger(overlapCount) && overlapCount >= 0
         ? overlapCount
         : null,
+    presentFor,
   };
 }
 

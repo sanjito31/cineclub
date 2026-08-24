@@ -263,6 +263,20 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     return null;
   }
 
+  const presentFor = Array.isArray(film.presentFor)
+    ? film.presentFor.flatMap((user) => {
+        if (!user || typeof user !== "object") return [];
+        const u = user as Record<string, unknown>;
+        const username = optionalString(u.username);
+        if (!username) return [];
+        return [{
+          username,
+          displayName: optionalString(u.displayName),
+          avatarUrl: optionalHttpsUrl(u.avatarUrl),
+        }];
+      })
+    : [];
+
   return {
     tmdbId,
     title,
@@ -275,6 +289,8 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     letterboxdUrl,
     letterboxdSlug: optionalString(film.letterboxdSlug),
     letterboxdMovieJobId: optionalString(film.letterboxdMovieJobId),
+    overlapCount: null,
+    presentFor,
   };
 }
 

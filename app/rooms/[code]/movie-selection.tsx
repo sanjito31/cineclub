@@ -969,6 +969,22 @@ export function MovieSelection({
                           {suggestion.releaseYear ? <span>{suggestion.releaseYear}</span> : null}
                         </span>
                         <RatingMarks letterboxdRating={suggestion.letterboxdRating} />
+                        {suggestion.presentFor.length > 0 ? (
+                          <span className="overlap-avatars" title={suggestion.presentFor.map((u) => u.displayName || u.username).join(", ")}>
+                            {suggestion.presentFor.slice(0, 3).map((user) => (
+                              <span key={user.username} className="overlap-avatar">
+                                {user.avatarUrl ? (
+                                  <img src={user.avatarUrl} alt={user.displayName || user.username} />
+                                ) : (
+                                  <span className="overlap-avatar-fallback">{(user.displayName || user.username).charAt(0).toUpperCase()}</span>
+                                )}
+                              </span>
+                            ))}
+                            {suggestion.presentFor.length > 3 ? (
+                              <span className="overlap-avatar overlap-avatar-more">+{suggestion.presentFor.length - 3}</span>
+                            ) : null}
+                          </span>
+                        ) : null}
                       </a>
                       {selectable ? (
                         <button

@@ -40,6 +40,14 @@ export type OverlapSuggestion = {
   letterboxdUrl: string;
   letterboxdSlug: string | null;
   letterboxdMovieJobId: string | null;
+  overlapCount: number | null;
+  presentFor: OverlapUser[];
+};
+
+export type OverlapUser = {
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
 };
 
 export type TmdbMovieSnapshot = {
@@ -91,6 +99,12 @@ export function overlapSuggestionFromFilm(
     letterboxdUrl: film.letterboxdUrl,
     letterboxdSlug: film.letterboxdSlug,
     letterboxdMovieJobId: null,
+    overlapCount: film.overlapCount,
+    presentFor: film.presentFor.map((user) => ({
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+    })),
   };
 }
 

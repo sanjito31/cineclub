@@ -277,6 +277,7 @@ test("overlap suggestions keep the top 10 Letterboxd-linked films", () => {
     posterUrl: `https://image.tmdb.org/t/p/w500/${index + 1}.jpg`,
     resolutionStatus: "resolved",
     overlapCount: 2,
+    presentFor: [],
   }));
 
   const suggestions = limitOverlapSuggestions(films);
@@ -301,6 +302,7 @@ test("pending overlap films stay visible and hydrate TMDB metadata after slug lo
     posterUrl: "https://a.ltrbxd.com/poster.jpg",
     resolutionStatus: null,
     overlapCount: 2,
+    presentFor: [],
   };
   const failedFilm = {
     ...pendingFilm,

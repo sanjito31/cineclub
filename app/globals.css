@@ -307,12 +307,18 @@ button { color: inherit; }
 .overlap-suggestions-status { margin: 10px 0 0; color: #527565; font-size: 11px; }
 .overlap-suggestion-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .overlap-suggestion-list > li { padding: 10px 12px; border: 1px solid #c8ddd2; border-radius: 7px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; background: white; }
-.overlap-suggestion-link { min-width: 0; color: inherit; text-decoration: none; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.overlap-suggestion-link { min-width: 0; color: inherit; text-decoration: none; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
 .overlap-suggestion-link:hover strong { color: var(--orange); }
 .overlap-suggestion-link:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
 .overlap-suggestion-copy { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; }
 .overlap-suggestion-copy strong { font-size: 15px; line-height: 1.3; }
 .overlap-suggestion-copy span { color: var(--muted); font-size: 11px; }
+.overlap-avatars { display: flex; align-items: center; position: relative; cursor: default; }
+.overlap-avatar { width: 26px; height: 26px; border-radius: 50%; border: 2px solid white; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #c8ddd2; flex-shrink: 0; }
+.overlap-avatar + .overlap-avatar { margin-left: -8px; }
+.overlap-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.overlap-avatar-fallback { font-size: 11px; font-weight: 700; color: #527565; line-height: 1; }
+.overlap-avatar-more { font-size: 10px; font-weight: 700; color: #527565; background: #edf6f1; }
 .movie-result-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
 .movie-result-list > li { padding: 12px; border: 1px solid var(--line); border-radius: 7px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 14px; background: white; }
 .selection-movie-tmdb-link { min-width: 0; color: inherit; text-decoration: none; border-radius: 6px; cursor: pointer; }
