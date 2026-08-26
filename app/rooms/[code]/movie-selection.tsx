@@ -94,7 +94,7 @@ function LetterboxdMovieLink({
 }) {
   return (
     <a
-      className="selection-movie-tmdb-link"
+      className="selection-movie-letterboxd-link"
       href={letterboxdMovieUrlFromTmdbId(movie.tmdbId)}
       target="_blank"
       rel="noreferrer"
@@ -957,23 +957,26 @@ export function MovieSelection({
                           <strong>{suggestion.title}</strong>
                           {suggestion.releaseYear ? <span>{suggestion.releaseYear}</span> : null}
                         </span>
-                        <RatingMarks letterboxdRating={suggestion.letterboxdRating} />
-                        {suggestion.presentFor.length > 0 ? (
-                          <span className="overlap-avatars" title={suggestion.presentFor.map((u) => u.displayName || u.username).join(", ")}>
-                            {suggestion.presentFor.slice(0, 3).map((user) => (
-                              <span key={user.username} className="overlap-avatar">
-                                {user.avatarUrl ? (
-                                  <img src={user.avatarUrl} alt={user.displayName || user.username} />
-                                ) : (
-                                  <span className="overlap-avatar-fallback">{(user.displayName || user.username).charAt(0).toUpperCase()}</span>
-                                )}
-                              </span>
-                            ))}
-                            {suggestion.presentFor.length > 3 ? (
-                              <span className="overlap-avatar overlap-avatar-more">+{suggestion.presentFor.length - 3}</span>
-                            ) : null}
-                          </span>
-                        ) : null}
+                        <span className="overlap-suggestion-meta">
+                          <RatingMarks letterboxdRating={suggestion.letterboxdRating} />
+                          {suggestion.presentFor.length > 0 ? (
+                            <span className="overlap-avatars" title={suggestion.presentFor.map((u) => u.displayName || u.username).join(", ")}>
+                              {suggestion.presentFor.slice(0, 3).map((user) => (
+                                <span key={user.username} className="overlap-avatar">
+                                  {user.avatarUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={user.avatarUrl} alt={user.displayName || user.username} />
+                                  ) : (
+                                    <span className="overlap-avatar-fallback">{(user.displayName || user.username).charAt(0).toUpperCase()}</span>
+                                  )}
+                                </span>
+                              ))}
+                              {suggestion.presentFor.length > 3 ? (
+                                <span className="overlap-avatar overlap-avatar-more">+{suggestion.presentFor.length - 3}</span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </span>
                       </a>
                       {selectable ? (
                         <button
