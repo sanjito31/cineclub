@@ -42,7 +42,18 @@ export type OverlapSuggestion = {
   letterboxdSlug: string | null;
   letterboxdMovieJobId: string | null;
   overlapCount: number | null;
+  runtimeMinutes: number | null;
   presentFor: OverlapUser[];
+};
+
+export type OverlapSuggestionSort = "rating" | "runtime" | "year" | "alphabetical";
+
+export type OverlapSuggestionFilters = {
+  ratingMin?: number | null;
+  ratingMax?: number | null;
+  yearMin?: number | null;
+  yearMax?: number | null;
+  usernames?: readonly string[];
 };
 
 export type OverlapUser = {
@@ -101,12 +112,74 @@ export function overlapSuggestionFromFilm(
     letterboxdSlug: film.letterboxdSlug,
     letterboxdMovieJobId: null,
     overlapCount: film.overlapCount,
+    runtimeMinutes: film.runtimeMinutes,
     presentFor: film.presentFor.map((user) => ({
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
     })),
   };
+}
+
+export function filterAndSortOverlapSuggestions(
+  suggestions: readonly OverlapSuggestion[],
+  sort: OverlapSuggestionSort,
+  filters: OverlapSuggestionFilters,
+) {
+  const usernames = new Set(
+    (filters.usernames ?? []).map((username) => username.toLowerCase()),
+  );
+  const filtered = suggestions.filter((suggestion) => {
+    if (
+      filters.ratingMin != null
+      && (suggestion.letterboxdRating == null || suggestion.letterboxdRating < filters.ratingMin)
+    ) return false;
+    if (
+      filters.ratingMax != null
+      && (suggestion.letterboxdRating == null || suggestion.letterboxdRating > filters.ratingMax)
+    ) return false;
+    if (
+      filters.yearMin != null
+      && (suggestion.releaseYear == null || suggestion.releaseYear < filters.yearMin)
+    ) return false;
+    if (
+      filters.yearMax != null
+      && (suggestion.releaseYear == null || suggestion.releaseYear > filters.yearMax)
+    ) return false;
+    if (usernames.size > 0) {
+      const present = new Set(suggestion.presentFor.map((user) => user.username.toLowerCase()));
+      if ([...usernames].some((username) => !present.has(username))) return false;
+    }
+    return true;
+  });
+
+  const nullLastDescending = (left: number | null, right: number | null) => {
+    if (left == null) return right == null ? 0 : 1;
+    if (right == null) return -1;
+    return right - left;
+  };
+  const nullLastAscending = (left: number | null, right: number | null) => {
+    if (left == null) return right == null ? 0 : 1;
+    if (right == null) return -1;
+    return left - right;
+  };
+
+  return [...filtered].sort((left, right) => {
+    const overlapOrder = nullLastDescending(left.overlapCount, right.overlapCount);
+    if (overlapOrder !== 0) return overlapOrder;
+
+    let withinGroupOrder = 0;
+    if (sort === "rating") {
+      withinGroupOrder = nullLastDescending(left.letterboxdRating, right.letterboxdRating);
+    } else if (sort === "runtime") {
+      withinGroupOrder = nullLastAscending(left.runtimeMinutes, right.runtimeMinutes);
+    } else if (sort === "year") {
+      withinGroupOrder = nullLastDescending(left.releaseYear, right.releaseYear);
+    } else {
+      withinGroupOrder = left.title.localeCompare(right.title);
+    }
+    return withinGroupOrder || left.title.localeCompare(right.title);
+  });
 }
 
 export function applyTmdbDetailsToOverlapSuggestion(
@@ -161,6 +234,7 @@ export function mergeOverlapSuggestion(
     overview: incoming.overview ?? existing.overview,
     tmdbRating: incoming.tmdbRating ?? existing.tmdbRating,
     letterboxdRating: incoming.letterboxdRating ?? existing.letterboxdRating,
+    runtimeMinutes: incoming.runtimeMinutes ?? existing.runtimeMinutes,
     letterboxdMovieJobId: tmdbId ? null : incoming.letterboxdMovieJobId ?? existing.letterboxdMovieJobId,
   };
 }

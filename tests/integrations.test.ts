@@ -498,6 +498,7 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
         letterboxdUrl: "https://letterboxd.com/film/fight-club/",
         posterUrl: "https://image.tmdb.org/t/p/w500/poster.jpg",
         resolutionStatus: "resolved",
+        metadata: { runtimeMinutes: 139 },
       },
     }),
     {
@@ -509,6 +510,7 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
       letterboxdUrl: "https://letterboxd.com/film/fight-club/",
       posterUrl: "https://image.tmdb.org/t/p/w500/poster.jpg",
       resolutionStatus: "resolved",
+      runtimeMinutes: 139,
     },
   );
 

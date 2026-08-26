@@ -48,6 +48,7 @@ export type SelectionSubmissionState = ActionState & {
     submittedAt: string;
     phase: RoomPhase;
     phaseTransitioned: boolean;
+    resubmitted: boolean;
     nominations: {
       id: string;
       slotIndex: number;
@@ -251,6 +252,12 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     : Number(film.releaseYear);
   const letterboxdRating = optionalRating(film.letterboxdRating, 5);
   const tmdbRating = optionalRating(film.tmdbRating, 10);
+  const runtimeMinutes = film.runtimeMinutes === null || film.runtimeMinutes === undefined
+    ? null
+    : Number(film.runtimeMinutes);
+  const overlapCount = film.overlapCount === null || film.overlapCount === undefined
+    ? null
+    : Number(film.overlapCount);
 
   if (
     !title
@@ -259,6 +266,8 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     || tmdbRating === undefined
     || (tmdbId !== null && (!Number.isSafeInteger(tmdbId) || tmdbId <= 0))
     || (releaseYear !== null && (!Number.isInteger(releaseYear) || releaseYear < 1888))
+    || (runtimeMinutes !== null && (!Number.isInteger(runtimeMinutes) || runtimeMinutes <= 0))
+    || (overlapCount !== null && (!Number.isInteger(overlapCount) || overlapCount < 0))
   ) {
     return null;
   }
@@ -289,7 +298,8 @@ export function parseOverlapSuggestion(value: unknown): OverlapSuggestion | null
     letterboxdUrl,
     letterboxdSlug: optionalString(film.letterboxdSlug),
     letterboxdMovieJobId: optionalString(film.letterboxdMovieJobId),
-    overlapCount: null,
+    overlapCount,
+    runtimeMinutes,
     presentFor,
   };
 }
@@ -311,6 +321,13 @@ export function parseWatchboxdContextResponse(value: unknown) {
   const watchedRecord = body.watched && typeof body.watched === "object"
     ? body.watched as { byTmdbId?: unknown; bySlug?: unknown; byTitleYear?: unknown }
     : null;
+  const paginationRecord = body.overlapPagination && typeof body.overlapPagination === "object"
+    ? body.overlapPagination as Record<string, unknown>
+    : null;
+  const overlapPage = Number(paginationRecord?.page);
+  const overlapPageSize = Number(paginationRecord?.pageSize);
+  const overlapTotal = Number(paginationRecord?.total);
+  const overlapTotalPages = Number(paginationRecord?.totalPages);
 
   function memberMap(value: unknown): Record<string, WatchedMember[]> {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -345,6 +362,12 @@ export function parseWatchboxdContextResponse(value: unknown) {
         })
       : [],
     overlapStatus,
+    overlapPagination: {
+      page: Number.isInteger(overlapPage) && overlapPage >= 1 ? overlapPage : 1,
+      pageSize: Number.isInteger(overlapPageSize) && overlapPageSize >= 1 ? overlapPageSize : 10,
+      total: Number.isInteger(overlapTotal) && overlapTotal >= 0 ? overlapTotal : 0,
+      totalPages: Number.isInteger(overlapTotalPages) && overlapTotalPages >= 0 ? overlapTotalPages : 0,
+    },
   };
 }
 

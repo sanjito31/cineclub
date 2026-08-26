@@ -266,7 +266,7 @@ test("participants can submit selections before the roster is locked", async () 
   assert.equal(fixture.roomPhase(), RoomPhase.SELECTION);
 });
 
-test("a successful submission is immutable", async () => {
+test("a participant can replace selections while the room is still selecting", async () => {
   const [fixture, service] = await modules;
   fixture.seedNominationRoom({
     selectionsPerUser: 1,
@@ -278,21 +278,56 @@ test("a successful submission is immutable", async () => {
     code: "ABC234",
     selections: [movie(1, 101, { overview: "A host favorite about found footage." })],
   });
+  const replacement = await service.submitNominations({
+    userId: "host",
+    code: "ABC234",
+    selections: [movie(1, 202)],
+  });
+
+  assert.equal(first.nominations.length, 1);
+  assert.equal(first.resubmitted, false);
+  assert.equal(replacement.resubmitted, true);
+  assert.deepEqual(
+    fixture.roomMovieRows().map(({ tmdbId, overview }) => ({ tmdbId, overview })),
+    [
+      { tmdbId: 101, overview: "A host favorite about found footage." },
+      { tmdbId: 202, overview: null },
+    ],
+  );
+  assert.equal(fixture.nominationRows().length, 1);
+  assert.equal(
+    fixture.nominationRows()[0]?.roomMovieId,
+    replacement.nominations[0]?.roomMovieId,
+  );
+});
+
+test("a failed replacement keeps the participant's previous selections", async () => {
+  const [fixture, service] = await modules;
+  fixture.seedNominationRoom({
+    selectionsPerUser: 1,
+    participantUserIds: ["host", "member"],
+  });
+  const first = await service.submitNominations({
+    userId: "host",
+    code: "ABC234",
+    selections: [movie(1, 101)],
+  });
+
+  fixture.injectNominationCreateFailure();
   await assert.rejects(
     service.submitNominations({
       userId: "host",
       code: "ABC234",
       selections: [movie(1, 202)],
     }),
-    /already been submitted/i,
+    /Injected nomination write failure/,
   );
 
-  assert.equal(first.nominations.length, 1);
-  assert.deepEqual(
-    fixture.roomMovieRows().map(({ tmdbId, overview }) => ({ tmdbId, overview })),
-    [{ tmdbId: 101, overview: "A host favorite about found footage." }],
-  );
   assert.equal(fixture.nominationRows().length, 1);
+  assert.equal(
+    fixture.nominationRows()[0]?.roomMovieId,
+    first.nominations[0]?.roomMovieId,
+  );
 });
 
 test("concurrent submissions safely upsert a shared TMDB movie", async () => {

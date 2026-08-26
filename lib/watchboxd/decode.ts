@@ -13,6 +13,7 @@ export type WatchboxdMovie = {
   letterboxdUrl: string | null;
   posterUrl: string | null;
   resolutionStatus: string | null;
+  runtimeMinutes: number | null;
 };
 
 export type WatchboxdWatchedItem = {
@@ -135,6 +136,11 @@ function optionalRating(value: unknown) {
   return rating !== null && rating >= 0 && rating <= 5 ? rating : null;
 }
 
+function optionalRuntime(value: unknown) {
+  const runtime = optionalFiniteNumber(value);
+  return runtime !== null && Number.isInteger(runtime) && runtime > 0 ? runtime : null;
+}
+
 function letterboxdUrlFromSlug(slug: string | null) {
   return slug ? `https://letterboxd.com/film/${encodeURIComponent(slug)}/` : null;
 }
@@ -200,6 +206,7 @@ export function decodeWatchboxdMovie(value: unknown): WatchboxdMovie | null {
   const letterboxdUrl =
     optionalHttpsUrl(movie.letterboxdUrl) ?? letterboxdUrlFromSlug(letterboxdSlug);
   if (!title && !letterboxdSlug && !letterboxdUrl) return null;
+  const metadata = asRecord(movie.metadata);
 
   return {
     tmdbId: optionalTmdbId(movie.tmdbId),
@@ -213,6 +220,9 @@ export function decodeWatchboxdMovie(value: unknown): WatchboxdMovie | null {
       ?? optionalHttpsUrl(movie.letterboxdPoster)
       ?? optionalHttpsUrl(movie.sourcePosterUrl),
     resolutionStatus: optionalString(movie.resolutionStatus),
+    runtimeMinutes:
+      optionalRuntime(movie.runtimeMinutes)
+      ?? optionalRuntime(metadata?.runtimeMinutes),
   };
 }
 

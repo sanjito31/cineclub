@@ -53,6 +53,17 @@ export type RoomWatchboxdContext = {
   suggestions: OverlapSuggestion[];
   overlapStatus: "ready" | "pending" | "skipped" | "unavailable";
   overlapPendingJobIds: string[];
+  overlapPagination: { page: number; pageSize: number; total: number; totalPages: number };
+  retryAfter: number | null;
+};
+
+export type RoomOverlapSuggestionsPage = {
+  eligibleForOverlap: boolean;
+  usernames: string[];
+  suggestions: OverlapSuggestion[];
+  overlapStatus: "ready" | "pending" | "skipped" | "unavailable";
+  overlapPendingJobIds: string[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
   retryAfter: number | null;
 };
 
@@ -389,6 +400,90 @@ async function hydrateOverlapSuggestions(
   );
 }
 
+export async function loadRoomOverlapSuggestionsPage(input: {
+  participants: readonly {
+    userId: string;
+    letterboxdUsernameSnapshot?: string | null;
+    user?: { displayName?: string | null; letterboxdUsername?: string | null };
+  }[];
+  page?: number;
+  letterboxdRatingMin?: number | null;
+  yearMin?: number | null;
+  yearMax?: number | null;
+  signal?: AbortSignal;
+}): Promise<RoomOverlapSuggestionsPage> {
+  const usernames = collectRoomLetterboxdMembers(input.participants)
+    .map((member) => member.letterboxdUsername);
+  const page = input.page ?? 1;
+  const emptyPagination = { page, pageSize: 10, total: 0, totalPages: 0 };
+  if (usernames.length < 2) {
+    return {
+      eligibleForOverlap: false,
+      usernames,
+      suggestions: [],
+      overlapStatus: "skipped",
+      overlapPendingJobIds: [],
+      pagination: emptyPagination,
+      retryAfter: null,
+    };
+  }
+
+  const query: Record<string, string> = {
+    page: String(page),
+    pageSize: "10",
+    includeMetadata: "true",
+  };
+  if (input.letterboxdRatingMin != null) {
+    query.letterboxdRatingMin = String(input.letterboxdRatingMin);
+  }
+  if (input.yearMin != null) query.releaseDateFrom = `${input.yearMin}-01-01`;
+  if (input.yearMax != null) query.releaseDateTo = `${input.yearMax}-12-31`;
+
+  try {
+    const overlap = await getWatchboxdOverlap(usernames, decodeWatchboxdOverlapPage, {
+      query,
+      signal: input.signal,
+    });
+    if (overlap.status === "pending") {
+      return {
+        eligibleForOverlap: true,
+        usernames,
+        suggestions: [],
+        overlapStatus: "pending",
+        overlapPendingJobIds: overlap.jobId ? [overlap.jobId] : [],
+        pagination: emptyPagination,
+        retryAfter: overlap.retryAfter,
+      };
+    }
+    if (overlap.status === "ready") {
+      return {
+        eligibleForOverlap: true,
+        usernames,
+        suggestions: await hydrateOverlapSuggestions(
+          limitOverlapSuggestions(overlap.data.films),
+          input.signal,
+        ),
+        overlapStatus: "ready",
+        overlapPendingJobIds: [],
+        pagination: overlap.data.pagination,
+        retryAfter: null,
+      };
+    }
+  } catch (error) {
+    if (error instanceof WatchboxdInputError) throw error;
+  }
+
+  return {
+    eligibleForOverlap: true,
+    usernames,
+    suggestions: [],
+    overlapStatus: "unavailable",
+    overlapPendingJobIds: [],
+    pagination: emptyPagination,
+    retryAfter: null,
+  };
+}
+
 export async function loadRoomWatchboxdContext(input: {
   participants: readonly {
     userId: string;
@@ -442,75 +537,19 @@ export async function loadRoomWatchboxdContext(input: {
     }
   }
 
-  const eligibleForOverlap = usernames.length >= 2;
-  if (!eligibleForOverlap) {
-    return {
-      eligibleForOverlap,
-      usernames,
-      watched,
-      watchedPendingJobIds,
-      suggestions: [],
-      overlapStatus: "skipped",
-      overlapPendingJobIds: [],
-      retryAfter,
-    };
-  }
-
-  try {
-    const overlap = await getWatchboxdOverlap(usernames, decodeWatchboxdOverlapPage, {
-      query: { page: "1", pageSize: "10" },
-      signal: input.signal,
-    });
-    if (overlap.status === "pending") {
-      return {
-        eligibleForOverlap,
-        usernames,
-        watched,
-        watchedPendingJobIds,
-        suggestions: [],
-        overlapStatus: "pending",
-        overlapPendingJobIds: overlap.jobId ? [overlap.jobId] : [],
-        retryAfter: Math.max(retryAfter ?? 0, overlap.retryAfter) || overlap.retryAfter,
-      };
-    }
-    if (overlap.status === "ready") {
-      return {
-        eligibleForOverlap,
-        usernames,
-        watched,
-        watchedPendingJobIds,
-        suggestions: await hydrateOverlapSuggestions(
-          limitOverlapSuggestions(overlap.data.films),
-          input.signal,
-        ),
-        overlapStatus: "ready",
-        overlapPendingJobIds: [],
-        retryAfter,
-      };
-    }
-  } catch (error) {
-    if (!(error instanceof WatchboxdInputError)) {
-      return {
-        eligibleForOverlap,
-        usernames,
-        watched,
-        watchedPendingJobIds,
-        suggestions: [],
-        overlapStatus: "unavailable",
-        overlapPendingJobIds: [],
-        retryAfter,
-      };
-    }
-  }
-
+  const overlap = await loadRoomOverlapSuggestionsPage({
+    participants: input.participants,
+    signal: input.signal,
+  });
   return {
-    eligibleForOverlap,
+    eligibleForOverlap: overlap.eligibleForOverlap,
     usernames,
     watched,
     watchedPendingJobIds,
-    suggestions: [],
-    overlapStatus: "unavailable",
-    overlapPendingJobIds: [],
-    retryAfter,
+    suggestions: overlap.suggestions,
+    overlapStatus: overlap.overlapStatus,
+    overlapPendingJobIds: overlap.overlapPendingJobIds,
+    overlapPagination: overlap.pagination,
+    retryAfter: Math.max(retryAfter ?? 0, overlap.retryAfter ?? 0) || null,
   };
 }

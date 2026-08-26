@@ -35,15 +35,21 @@ export type SubmitNominationsResult = {
   submittedAt: string;
   phase: RoomPhase;
   phaseTransitioned: boolean;
+  resubmitted: boolean;
   nominations: SubmittedNomination[];
   duplicates: NominationDuplicateReport;
 };
 
 export type SubmittedNominationView = {
   slotIndex: number;
+  tmdbId: number;
   title: string;
   releaseYear: number | null;
+  overview: string | null;
   posterPath: string | null;
+  letterboxdRating: number | null;
+  letterboxdSlug: string | null;
+  letterboxdJobId: string | null;
 };
 
 export async function getSubmittedNominations(
@@ -58,8 +64,13 @@ export async function getSubmittedNominations(
       roomMovie: {
         select: {
           title: true,
+          tmdbId: true,
           releaseYear: true,
+          overview: true,
           posterPath: true,
+          letterboxdRating: true,
+          letterboxdSlug: true,
+          letterboxdJobId: true,
         },
       },
     },
@@ -67,9 +78,16 @@ export async function getSubmittedNominations(
 
   return nominations.map((n) => ({
     slotIndex: n.slotIndex,
+    tmdbId: n.roomMovie.tmdbId,
     title: n.roomMovie.title,
     releaseYear: n.roomMovie.releaseYear,
+    overview: n.roomMovie.overview,
     posterPath: n.roomMovie.posterPath,
+    letterboxdRating: n.roomMovie.letterboxdRating === null
+      ? null
+      : Number(n.roomMovie.letterboxdRating),
+    letterboxdSlug: n.roomMovie.letterboxdSlug,
+    letterboxdJobId: n.roomMovie.letterboxdJobId,
   }));
 }
 
@@ -191,13 +209,6 @@ export async function submitNominations(
       );
     }
 
-    if (participant.selectionSubmittedAt) {
-      throw new NominationSubmissionError(
-        "ALREADY_SUBMITTED",
-        "Your movie selections have already been submitted and cannot be changed.",
-      );
-    }
-
     if (room.phase !== RoomPhase.SELECTION) {
       throw new NominationSubmissionError(
         "WRONG_PHASE",
@@ -214,6 +225,16 @@ export async function submitNominations(
       participantId: participant.id,
       selections,
     });
+
+    const resubmitted = participant.selectionSubmittedAt !== null;
+    if (resubmitted) {
+      await tx.nomination.deleteMany({
+        where: {
+          roomId: room.id,
+          participantId: participant.id,
+        },
+      });
+    }
 
     const nominations: SubmittedNomination[] = [];
     for (const selection of selections) {
@@ -262,15 +283,14 @@ export async function submitNominations(
       where: {
         id: participant.id,
         roomId: room.id,
-        selectionSubmittedAt: null,
       },
       data: { selectionSubmittedAt: submittedAt },
     });
 
     if (submissionUpdate.count !== 1) {
       throw new NominationSubmissionError(
-        "ALREADY_SUBMITTED",
-        "Your movie selections have already been submitted and cannot be changed.",
+        "NOT_PARTICIPANT",
+        "You are not a member of this room.",
       );
     }
 
@@ -286,6 +306,7 @@ export async function submitNominations(
       submittedAt: submittedAt.toISOString(),
       phase: transition.phase,
       phaseTransitioned: transition.transitioned,
+      resubmitted,
       nominations,
       duplicates,
     };

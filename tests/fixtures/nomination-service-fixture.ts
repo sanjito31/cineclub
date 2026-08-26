@@ -144,7 +144,7 @@ const transactionClient = {
       where: {
         id: string;
         roomId: string;
-        selectionSubmittedAt: null;
+        selectionSubmittedAt?: null;
       };
       data: { selectionSubmittedAt: Date };
     }) => {
@@ -152,7 +152,7 @@ const transactionClient = {
       if (
         !participant ||
         participant.roomId !== query.where.roomId ||
-        participant.selectionSubmittedAt !== null
+        (query.where.selectionSubmittedAt === null && participant.selectionSubmittedAt !== null)
       ) {
         return { count: 0 };
       }
@@ -267,6 +267,21 @@ const transactionClient = {
       };
       nominations.set(nomination.id, nomination);
       return { id: nomination.id };
+    },
+    deleteMany: async (query: {
+      where: { roomId: string; participantId: string };
+    }) => {
+      let count = 0;
+      for (const [id, nomination] of nominations) {
+        if (
+          nomination.roomId === query.where.roomId
+          && nomination.participantId === query.where.participantId
+        ) {
+          nominations.delete(id);
+          count += 1;
+        }
+      }
+      return { count };
     },
   },
   roomMovieResult: {

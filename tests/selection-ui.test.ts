@@ -7,6 +7,7 @@ import {
   duplicateSelectionIds,
   overlapToSelectionMovie,
   parseMovieSearchResponse,
+  parseWatchboxdContextResponse,
   serializeSelectionSubmission,
   letterboxdMovieUrlFromTmdbId,
   toSelectionMovie,
@@ -18,6 +19,7 @@ import {
   applyLetterboxdMovieLookupToSuggestion,
   applyTmdbDetailsToOverlapSuggestion,
   emptyWatchedIndex,
+  filterAndSortOverlapSuggestions,
   limitOverlapSuggestions,
   mergeOverlapSuggestion,
   watchboxdMovieNeedsResolution,
@@ -51,6 +53,25 @@ test("search results use Letterboxd's TMDB-id redirect", () => {
     letterboxdMovieUrlFromTmdbId(550),
     "https://letterboxd.com/tmdb/550/",
   );
+});
+
+test("Watchboxd selection context keeps overlap pagination metadata", () => {
+  const context = parseWatchboxdContextResponse({
+    status: "ready",
+    retryAfter: 2,
+    eligibleForOverlap: true,
+    usernames: ["alice", "bob"],
+    watched: { byTmdbId: {}, bySlug: {}, byTitleYear: {} },
+    suggestions: [],
+    overlapStatus: "ready",
+    overlapPagination: { page: 2, pageSize: 10, total: 24, totalPages: 3 },
+  });
+  assert.deepEqual(context?.overlapPagination, {
+    page: 2,
+    pageSize: 10,
+    total: 24,
+    totalPages: 3,
+  });
 });
 
 test("selection slots match the room requirement exactly", () => {
@@ -310,6 +331,7 @@ test("watched union attribution becomes selection warnings for room members", ()
         letterboxdUrl: "https://letterboxd.com/film/fight-club/",
         posterUrl: null,
         resolutionStatus: null,
+        runtimeMinutes: null,
         watchedBy: [
           {
             username: "alice",
@@ -366,6 +388,7 @@ test("overlap suggestions keep the top 10 Letterboxd-linked films", () => {
     letterboxdUrl: index === 1 ? null : `https://letterboxd.com/film/film-${index + 1}/`,
     posterUrl: `https://image.tmdb.org/t/p/w500/${index + 1}.jpg`,
     resolutionStatus: "resolved",
+    runtimeMinutes: 90 + index,
     overlapCount: 2,
     presentFor: [],
   }));
@@ -381,6 +404,40 @@ test("overlap suggestions keep the top 10 Letterboxd-linked films", () => {
   assert.equal(suggestions[0]?.letterboxdMovieJobId, null);
 });
 
+test("overlap controls filter movies and sort only within overlap groups", () => {
+  const suggestions = limitOverlapSuggestions([
+    {
+      tmdbId: 1, title: "Lower rated, more overlap", year: 2001,
+      letterboxdRating: 3.5, letterboxdSlug: "more-overlap",
+      letterboxdUrl: "https://letterboxd.com/film/more-overlap/", posterUrl: null,
+      resolutionStatus: "resolved", runtimeMinutes: 140, overlapCount: 3,
+      presentFor: [{ username: "alice", displayName: "Alice", avatarUrl: null }],
+    },
+    {
+      tmdbId: 2, title: "Higher rated, less overlap", year: 2020,
+      letterboxdRating: 4.9, letterboxdSlug: "less-overlap",
+      letterboxdUrl: "https://letterboxd.com/film/less-overlap/", posterUrl: null,
+      resolutionStatus: "resolved", runtimeMinutes: 80, overlapCount: 2,
+      presentFor: [{ username: "bob", displayName: "Bob", avatarUrl: null }],
+    },
+  ]);
+
+  assert.deepEqual(
+    filterAndSortOverlapSuggestions(suggestions, "rating", {}).map((movie) => movie.tmdbId),
+    [1, 2],
+  );
+  assert.deepEqual(
+    filterAndSortOverlapSuggestions(suggestions, "runtime", { usernames: ["bob"] })
+      .map((movie) => movie.tmdbId),
+    [2],
+  );
+  assert.deepEqual(
+    filterAndSortOverlapSuggestions(suggestions, "rating", { ratingMin: 4 })
+      .map((movie) => movie.tmdbId),
+    [2],
+  );
+});
+
 test("pending overlap films stay visible and hydrate TMDB metadata after slug lookup", () => {
   const pendingFilm = {
     tmdbId: null,
@@ -391,6 +448,7 @@ test("pending overlap films stay visible and hydrate TMDB metadata after slug lo
     letterboxdUrl: "https://letterboxd.com/film/pending-film/",
     posterUrl: "https://a.ltrbxd.com/poster.jpg",
     resolutionStatus: null,
+    runtimeMinutes: null,
     overlapCount: 2,
     presentFor: [],
   };

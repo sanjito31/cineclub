@@ -27,6 +27,7 @@ export type SubmitNominationsActionResult = {
   submittedAt: string;
   phase: RoomPhase;
   phaseTransitioned: boolean;
+  resubmitted: boolean;
   nominations: SubmittedNomination[];
   duplicateWarnings: ExistingNominationDuplicate[];
 };
@@ -92,7 +93,9 @@ export async function submitNominationsAction(
       status: "success",
       message: result.phaseTransitioned
         ? "Selections submitted. Voting is now open."
-        : "Selections submitted. Waiting for the remaining participants.",
+        : result.resubmitted
+          ? "Selections updated. You can update them again until voting begins."
+          : "Selections submitted. Waiting for the remaining participants.",
       result: {
         roomId: result.roomId,
         code: result.code,
@@ -100,6 +103,7 @@ export async function submitNominationsAction(
         submittedAt: result.submittedAt,
         phase: result.phase,
         phaseTransitioned: result.phaseTransitioned,
+        resubmitted: result.resubmitted,
         nominations: result.nominations,
         duplicateWarnings: result.duplicates.existingByOtherParticipants,
       },

@@ -1,105 +1,60 @@
 "use client";
 
 import Image from "next/image";
-import {
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { initialActionState } from "@/app/actions/types";
 import { ActionMessage } from "@/app/components/action-message";
 import {
-  applyRatingLookupToMovie,
-  applyWatchedIndexToMovie,
-  createSelectionSlots,
-  duplicateSelectionIds,
-  letterboxdMovieUrlFromTmdbId,
-  moviePosterSrc,
-  overlapToSelectionMovie,
-  parseLetterboxdMovieLookupsResponse,
-  parseMovieRatingsResponse,
-  parseMovieSearchResponse,
-  parseWatchboxdContextResponse,
+  applyRatingLookupToMovie, applyWatchedIndexToMovie, createSelectionSlots,
+  duplicateSelectionIds, letterboxdMovieUrlFromTmdbId, moviePosterSrc,
+  overlapToSelectionMovie, parseLetterboxdMovieLookupsResponse,
+  parseMovieRatingsResponse, parseMovieSearchResponse, parseWatchboxdContextResponse,
   serializeSelectionSubmission,
 } from "@/app/rooms/[code]/selection-contracts";
 import type {
-  OverlapSuggestion,
-  SelectionMovie,
-  SelectionSubmissionState,
-  SelectionSlotValue,
-  SubmitSelectionsAction,
-  WatchedIndex,
-  WatchedMember,
+  OverlapSuggestion, SelectionMovie, SelectionSubmissionState, SelectionSlotValue,
+  SubmitSelectionsAction, WatchedIndex, WatchedMember,
 } from "@/app/rooms/[code]/selection-contracts";
+import {
+  applyLetterboxdMovieLookupToSuggestion, emptyWatchedIndex,
+  filterAndSortOverlapSuggestions, mergeOverlapSuggestion, watchedWarningCopy,
+  type OverlapSuggestionSort,
+} from "@/lib/domain/watchboxd-selection";
 import { pollAsyncResource } from "@/lib/integrations/async-resource";
-import { applyLetterboxdMovieLookupToSuggestion, emptyWatchedIndex, mergeOverlapSuggestion, watchedWarningCopy } from "@/lib/domain/watchboxd-selection";
 
 type SearchStatus = "idle" | "loading" | "success" | "empty" | "error";
-
-type SlotSearchState = {
-  query: string;
-  submittedQuery: string;
-  results: SelectionMovie[];
-  status: SearchStatus;
-  message?: string;
-  editing: boolean;
-  page: number;
-  totalPages: number;
+type SearchState = {
+  query: string; submittedQuery: string; results: SelectionMovie[];
+  status: SearchStatus; message?: string; page: number; totalPages: number;
 };
-
 type OverlapState = {
   eligible: boolean;
   status: "idle" | "pending" | "ready" | "skipped" | "unavailable";
   suggestions: OverlapSuggestion[];
+  page: number;
+  totalPages: number;
+  total: number;
 };
+type ParsedWatchboxdContext = NonNullable<ReturnType<typeof parseWatchboxdContextResponse>>;
 
-function createSearchStates(count: number): SlotSearchState[] {
-  return Array.from({ length: count }, () => ({
-    query: "",
-    submittedQuery: "",
-    results: [],
-    status: "idle",
-    editing: true,
-    page: 1,
-    totalPages: 0,
-  }));
-}
-
-function searchStateIndex(slotIndex: number) {
-  return slotIndex - 1;
-}
+const createSearchState = (): SearchState => ({
+  query: "", submittedQuery: "", results: [], status: "idle", page: 1, totalPages: 0,
+});
 
 function wait(milliseconds: number, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
     const timeout = window.setTimeout(resolve, milliseconds);
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timeout);
-        reject(new DOMException("Aborted", "AbortError"));
-      },
-      { once: true },
-    );
+    signal.addEventListener("abort", () => {
+      window.clearTimeout(timeout);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
   });
 }
 
-function LetterboxdMovieLink({
-  movie,
-  children,
-}: {
-  movie: SelectionMovie;
-  children: ReactNode;
-}) {
+function LetterboxdMovieLink({ movie, children }: { movie: SelectionMovie; children: ReactNode }) {
   return (
-    <a
-      className="selection-movie-letterboxd-link"
-      href={letterboxdMovieUrlFromTmdbId(movie.tmdbId)}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={`Open ${movie.title} on Letterboxd`}
-    >
+    <a className="selection-movie-letterboxd-link" href={letterboxdMovieUrlFromTmdbId(movie.tmdbId)}
+      target="_blank" rel="noreferrer" aria-label={`Open ${movie.title} on Letterboxd`}>
       {children}
     </a>
   );
@@ -112,106 +67,42 @@ function searchErrorMessage(value: unknown) {
   return typeof message === "string" && message.trim() ? message.trim() : null;
 }
 
-function enrichMovie(movie: SelectionMovie, watched: WatchedIndex) {
-  return applyWatchedIndexToMovie(movie, watched);
-}
-
 function WatchedAvatars({ members }: { members: WatchedMember[] }) {
-  return (
-    <span className="watched-avatars" aria-hidden="true">
-      {members.map((member) => (
-        member.avatarUrl ? (
-          // Letterboxd avatar hosts vary; a plain img avoids Next image-config misses crashing the warning.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={member.userId}
-            className="watched-avatar"
-            src={member.avatarUrl}
-            alt=""
-            width={22}
-            height={22}
-          />
-        ) : (
-          <span key={member.userId} className="watched-avatar is-fallback">
-            {member.displayName.slice(0, 1).toUpperCase()}
-          </span>
-        )
-      ))}
+  return <span className="watched-avatars" aria-hidden="true">{members.map((member) => member.avatarUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img key={member.userId} className="watched-avatar" src={member.avatarUrl} alt="" width={22} height={22} />
+  ) : (
+    <span key={member.userId} className="watched-avatar is-fallback">
+      {member.displayName.slice(0, 1).toUpperCase()}
     </span>
-  );
+  ))}</span>;
 }
 
-function MoviePoster({
-  movie,
-}: {
+function MoviePoster({ movie }: {
   movie: { title: string; posterUrl?: string | null; posterPath?: string | null };
 }) {
   const src = moviePosterSrc(movie);
-  if (src) {
-    return (
-      <Image
-        className="selection-movie-poster"
-        src={src}
-        alt=""
-        width={46}
-        height={69}
-      />
-    );
-  }
-
-  return (
-    <span className="selection-movie-poster is-missing" aria-hidden="true">
-      {movie.title.slice(0, 1).toUpperCase()}
-    </span>
-  );
+  return src
+    ? <Image className="selection-movie-poster" src={src} alt="" width={46} height={69} />
+    : <span className="selection-movie-poster is-missing" aria-hidden="true">{movie.title.slice(0, 1).toUpperCase()}</span>;
 }
 
-function RatingBadge({
-  className,
-  src,
-  value,
-  label,
-}: {
-  className: string;
-  src: string;
-  value: number;
-  label: string;
-}) {
-  return (
-    <span className={`rating-badge ${className}`} aria-label={label}>
-      {/* Logos are local public assets; img keeps SVG/PNG sizing simple in these tiny badges. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="rating-badge-logo" src={src} alt="" width={20} height={20} />
-      <span className="rating-badge-value">{value.toFixed(1)}</span>
-    </span>
-  );
-}
-
-function RatingMarks({
-  letterboxdRating,
-}: {
-  letterboxdRating?: number | null;
-}) {
+function RatingMarks({ letterboxdRating }: { letterboxdRating?: number | null }) {
+  if (letterboxdRating == null) return null;
   return (
     <span className="selection-rating-marks">
-      {letterboxdRating !== null && letterboxdRating !== undefined ? (
-        <RatingBadge
-          className="letterboxd-rating"
-          src="/letterboxd.png"
-          value={letterboxdRating}
-          label={`Letterboxd rating ${letterboxdRating.toFixed(1)} out of 5`}
-        />
-      ) : null}
+      <span className="rating-badge letterboxd-rating"
+        aria-label={`Letterboxd rating ${letterboxdRating.toFixed(1)} out of 5`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="rating-badge-logo" src="/letterboxd.png" alt="" width={20} height={20} />
+        <span className="rating-badge-value">{letterboxdRating.toFixed(1)}</span>
+      </span>
     </span>
   );
 }
 
-function MovieDetails({
-  movie,
-  sameUserDuplicate = false,
-}: {
-  movie: SelectionMovie;
-  sameUserDuplicate?: boolean;
+function MovieDetails({ movie, sameUserDuplicate = false }: {
+  movie: SelectionMovie; sameUserDuplicate?: boolean;
 }) {
   const watchedCopy = watchedWarningCopy(movie.watchedByMembers);
   return (
@@ -219,821 +110,560 @@ function MovieDetails({
       <MoviePoster movie={movie} />
       <div className="selection-movie-details">
         <div className="selection-movie-heading">
-          <div>
-            <strong>{movie.title}</strong>
-            {movie.releaseYear ? <span>{movie.releaseYear}</span> : null}
-          </div>
-          <RatingMarks
-            letterboxdRating={movie.letterboxdRating}
-          />
+          <div><strong>{movie.title}</strong>{movie.releaseYear ? <span>{movie.releaseYear}</span> : null}</div>
+          <RatingMarks letterboxdRating={movie.letterboxdRating} />
         </div>
         {movie.overview ? <p className="selection-movie-overview">{movie.overview}</p> : null}
-        {movie.suggestionReason ? (
-          <p className="selection-suggestion-note">Suggested: {movie.suggestionReason}</p>
-        ) : null}
+        {movie.suggestionReason ? <p className="selection-suggestion-note">Suggested: {movie.suggestionReason}</p> : null}
         <div className="selection-warnings" aria-live="polite">
-          {sameUserDuplicate ? (
-            <p className="selection-warning is-blocking">
-              You chose this movie in another slot. Replace one copy before submitting.
-            </p>
-          ) : null}
+          {sameUserDuplicate ? <p className="selection-warning is-blocking">You chose this movie more than once. Remove one copy before submitting.</p> : null}
           {watchedCopy ? (
-            <p className="selection-warning watched-warning">
-              <WatchedAvatars members={movie.watchedByMembers} />
-              <span>{watchedCopy}</span>
-            </p>
-          ) : movie.watchedByCurrentUser ? (
-            <p className="selection-warning">
-              Watched warning: you’ve already logged this movie.
-            </p>
-          ) : null}
+            <p className="selection-warning watched-warning"><WatchedAvatars members={movie.watchedByMembers} /><span>{watchedCopy}</span></p>
+          ) : movie.watchedByCurrentUser ? <p className="selection-warning">You’ve already logged this movie.</p> : null}
           {movie.alreadyNominatedBy.length > 0 ? (
-            <p className="selection-warning">
-              <span className="selection-warning-icon" aria-hidden="true">
-                <svg viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M8 2.4 1.7 13.2h12.6L8 2.4Z"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M8 6.4v3.1"
-                    stroke="currentColor"
-                    strokeWidth="1.2"
-                    strokeLinecap="round"
-                  />
-                  <circle cx="8" cy="11.35" r=".7" fill="currentColor" />
-                </svg>
-              </span>
-              This movie has already been chosen by someone else. Choose another movie.
-            </p>
+            <p className="selection-warning"><span className="selection-warning-icon" aria-hidden="true">⚠</span>This movie has already been chosen by someone else. Choose another movie.</p>
           ) : null}
-          {movie.overlappingParticipants.length > 0 ? (
-            <p className="selection-overlap">
-              Watchlist overlap with {movie.overlappingParticipants.join(", ")}.
-            </p>
-          ) : null}
+          {movie.overlappingParticipants.length > 0 ? <p className="selection-overlap">Watchlist overlap with {movie.overlappingParticipants.join(", ")}.</p> : null}
         </div>
       </div>
     </div>
   );
 }
 
+function SelectedCheck({ title }: { title: string }) {
+  return <span className="movie-choice-check" aria-label={`${title} selected`} title="Selected"><span aria-hidden="true">✓</span></span>;
+}
+
+function optionalNumber(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function MovieSelection({
-  code,
-  selectionsPerUser,
-  searchEndpoint,
-  watchboxdEndpoint,
-  ratingsEndpoint,
-  letterboxdMoviesEndpoint,
-  submitSelectionsAction,
-  initialSelections = [],
-  initialSuggestions = [],
+  code, selectionsPerUser, searchEndpoint, watchboxdEndpoint, ratingsEndpoint,
+  letterboxdMoviesEndpoint, submitSelectionsAction, initialSelections = [],
+  hasSubmittedSelections = false,
 }: {
-  code: string;
-  selectionsPerUser: number;
-  searchEndpoint: string;
-  watchboxdEndpoint: string;
-  ratingsEndpoint: string;
-  letterboxdMoviesEndpoint: string;
-  submitSelectionsAction: SubmitSelectionsAction;
-  initialSelections?: SelectionSlotValue[];
+  code: string; selectionsPerUser: number; searchEndpoint: string; watchboxdEndpoint: string;
+  ratingsEndpoint: string; letterboxdMoviesEndpoint: string;
+  submitSelectionsAction: SubmitSelectionsAction; initialSelections?: SelectionSlotValue[];
   initialSuggestions?: SelectionMovie[];
+  hasSubmittedSelections?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState<SelectionSubmissionState, FormData>(
-    submitSelectionsAction,
-    initialActionState,
-  );
+  const [state, formAction, pending] = useActionState<SelectionSubmissionState, FormData>(submitSelectionsAction, initialActionState);
   const [slots, setSlots] = useState<SelectionSlotValue[]>(() => {
-    const emptySlots = createSelectionSlots(selectionsPerUser);
+    const values = createSelectionSlots(selectionsPerUser);
     for (const initial of initialSelections) {
-      const index = searchStateIndex(initial.slotIndex);
-      if (index >= 0 && index < emptySlots.length) {
-        emptySlots[index] = initial;
-      }
+      const index = initial.slotIndex - 1;
+      if (index >= 0 && index < values.length) values[index] = initial;
     }
-    return emptySlots;
+    return values;
   });
-  const [searches, setSearches] = useState(() => createSearchStates(selectionsPerUser));
-  const [suggestions] = useState(initialSuggestions);
+  const [search, setSearch] = useState(createSearchState);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [overlap, setOverlap] = useState<OverlapState>({
-    eligible: false,
-    status: "idle",
-    suggestions: [],
+    eligible: false, status: "idle", suggestions: [], page: 1, totalPages: 0, total: 0,
   });
+  const [overlapPageLoading, setOverlapPageLoading] = useState(false);
+  const [overlapError, setOverlapError] = useState(false);
+  const [overlapSort, setOverlapSort] = useState<OverlapSuggestionSort>("rating");
+  const [ratingMin, setRatingMin] = useState("");
+  const [yearMin, setYearMin] = useState("");
+  const [yearMax, setYearMax] = useState("");
+  const [includedUsers, setIncludedUsers] = useState<string[]>([]);
+  const [controlTray, setControlTray] = useState<"sort" | "filter" | null>(null);
+  const [draftSort, setDraftSort] = useState<OverlapSuggestionSort>("rating");
+  const [draftRatingMin, setDraftRatingMin] = useState("");
+  const [draftYearMin, setDraftYearMin] = useState("");
+  const [draftYearMax, setDraftYearMax] = useState("");
+  const [draftIncludedUsers, setDraftIncludedUsers] = useState<string[]>([]);
   const [watched, setWatched] = useState<WatchedIndex>(emptyWatchedIndex);
-  const [confirmed, setConfirmed] = useState(false);
-  const controllers = useRef(new Map<number, AbortController>());
+  const searchController = useRef<AbortController | null>(null);
+  const overlapPageController = useRef<AbortController | null>(null);
+  const searchSectionRef = useRef<HTMLDivElement | null>(null);
+  const overlapControlsRef = useRef<HTMLDivElement | null>(null);
   const submitStarted = useRef(false);
   const watchedRef = useRef(watched);
   watchedRef.current = watched;
 
-  useEffect(() => {
-    const activeControllers = controllers.current;
-    return () => {
-      for (const controller of activeControllers.values()) controller.abort();
-    };
+  useEffect(() => () => {
+    searchController.current?.abort();
+    overlapPageController.current?.abort();
   }, []);
-
+  useEffect(() => { if (!pending) submitStarted.current = false; }, [pending, state.status]);
   useEffect(() => {
-    if (!pending && state.status !== "success") submitStarted.current = false;
-  }, [pending, state.status]);
+    if (!searchOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!searchSectionRef.current?.contains(event.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [searchOpen]);
+  useEffect(() => {
+    if (!controlTray) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!overlapControlsRef.current?.contains(event.target as Node)) setControlTray(null);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [controlTray]);
 
   useEffect(() => {
     const controller = new AbortController();
-
     void (async () => {
       try {
-        await pollAsyncResource(async ({ signal }) => {
-          const response = await fetch(watchboxdEndpoint, {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal,
-          });
+        const result = await pollAsyncResource(async ({ signal }) => {
+          const response = await fetch(watchboxdEndpoint, { cache: "no-store", credentials: "same-origin", signal });
           const body: unknown = await response.json().catch(() => null);
           const parsed = parseWatchboxdContextResponse(body);
-          if (!parsed) {
-            return response.status === 202
-              ? { status: "pending", retryAfter: 2, jobId: null }
-              : { status: "unavailable", reason: "malformed_response" };
-          }
+          if (!parsed) return response.status === 202
+            ? { status: "pending", retryAfter: 2, jobId: null }
+            : { status: "unavailable", reason: "malformed_response" };
 
           setWatched(parsed.watched);
-          let overlapStatus: OverlapState["status"] = parsed.overlapStatus;
-          if (parsed.overlapStatus === "skipped") {
-            overlapStatus = "skipped";
-          } else if (parsed.status === "pending" && parsed.overlapStatus !== "ready") {
-            overlapStatus = "pending";
-          }
+          setOverlapError(parsed.overlapStatus === "unavailable");
           setOverlap((current) => ({
             eligible: parsed.eligibleForOverlap,
-            status: overlapStatus,
+            status: parsed.status === "pending" && parsed.overlapStatus !== "ready" ? "pending" : parsed.overlapStatus,
             suggestions: parsed.suggestions.map((suggestion) => {
-              const existing = current.suggestions.find((candidate) => (
+              const existing = current.suggestions.find((candidate) =>
                 (suggestion.letterboxdSlug && candidate.letterboxdSlug === suggestion.letterboxdSlug)
-                || candidate.letterboxdUrl === suggestion.letterboxdUrl
-              ));
+                || candidate.letterboxdUrl === suggestion.letterboxdUrl);
               return mergeOverlapSuggestion(suggestion, existing);
             }),
+            page: parsed.overlapPagination.page,
+            totalPages: parsed.overlapPagination.totalPages,
+            total: parsed.overlapPagination.total,
           }));
           setSlots((current) => current.map((slot) => ({
-            ...slot,
-            movie: slot.movie ? applyWatchedIndexToMovie(slot.movie, parsed.watched) : slot.movie,
+            ...slot, movie: slot.movie ? applyWatchedIndexToMovie(slot.movie, parsed.watched) : null,
           })));
-          setSearches((current) => current.map((search) => ({
-            ...search,
-            results: search.results.map((movie) => applyWatchedIndexToMovie(movie, parsed.watched)),
-          })));
-
-          if (parsed.status === "pending" || response.status === 202) {
-            return {
-              status: "pending",
-              retryAfter: parsed.retryAfter,
-              jobId: parsed.pendingJobIds[0] ?? null,
-            };
-          }
+          setSearch((current) => ({
+            ...current, results: current.results.map((movie) => applyWatchedIndexToMovie(movie, parsed.watched)),
+          }));
+          if (parsed.status === "pending" || response.status === 202) return {
+            status: "pending", retryAfter: parsed.retryAfter, jobId: parsed.pendingJobIds[0] ?? null,
+          };
           return { status: "ready", data: parsed };
-        }, {
-          signal: controller.signal,
-          maxAttempts: 30,
-          timeoutMs: 90_000,
-          maxDelayMs: 10_000,
-        });
+        }, { signal: controller.signal, maxAttempts: 30, timeoutMs: 90_000, maxDelayMs: 10_000 });
+        if (result.status !== "ready" && result.status !== "cancelled") {
+          setOverlapError(true);
+          setOverlap((current) => ({ ...current, status: "unavailable" }));
+        }
       } catch (error) {
-        if (controller.signal.aborted) return;
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+        setOverlapError(true);
+        setOverlap((current) => ({ ...current, status: "unavailable" }));
       }
     })();
-
     return () => controller.abort();
   }, [watchboxdEndpoint]);
 
-  const pendingRatingIds = [
-    ...new Set([
-      ...slots.flatMap((slot) => slot.movie?.letterboxdRatingJobId ? [slot.movie.tmdbId] : []),
-      ...searches.flatMap((search) =>
-        search.results.flatMap((movie) => movie.letterboxdRatingJobId ? [movie.tmdbId] : []),
-      ),
-    ]),
-  ].sort((left, right) => left - right);
-  const pendingRatingKey = pendingRatingIds.join(",");
+  const pendingRatingKey = [...new Set([
+    ...slots.flatMap((slot) => slot.movie?.letterboxdRatingJobId ? [slot.movie.tmdbId] : []),
+    ...search.results.flatMap((movie) => movie.letterboxdRatingJobId ? [movie.tmdbId] : []),
+  ])].sort((left, right) => left - right).join(",");
 
   useEffect(() => {
     if (!pendingRatingKey) return;
-    const tmdbIds = pendingRatingKey.split(",").map(Number);
     const controller = new AbortController();
-
     void (async () => {
       try {
-        let pendingIds = tmdbIds;
+        let pendingIds = pendingRatingKey.split(",").map(Number);
         for (let attempt = 0; attempt < 20 && pendingIds.length > 0; attempt += 1) {
           const url = new URL(ratingsEndpoint, window.location.origin);
           url.searchParams.set("tmdbIds", pendingIds.join(","));
-          const response = await fetch(url, {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          });
-          const body: unknown = await response.json().catch(() => null);
-          const ratings = parseMovieRatingsResponse(body);
-          if (!ratings) {
-            await wait(2_000, controller.signal);
-            continue;
-          }
-
-          const byTmdbId = new Map(ratings.map((rating) => [rating.tmdbId, rating]));
+          const response = await fetch(url, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+          const ratings = parseMovieRatingsResponse(await response.json().catch(() => null));
+          if (!ratings) { await wait(2_000, controller.signal); continue; }
+          const byId = new Map(ratings.map((rating) => [rating.tmdbId, rating]));
           setSlots((current) => current.map((slot) => {
             if (!slot.movie) return slot;
-            const update = byTmdbId.get(slot.movie.tmdbId);
-            return update
-              ? { ...slot, movie: applyWatchedIndexToMovie(applyRatingLookupToMovie(slot.movie, update), watchedRef.current) }
-              : slot;
+            const update = byId.get(slot.movie.tmdbId);
+            return update ? { ...slot, movie: applyWatchedIndexToMovie(applyRatingLookupToMovie(slot.movie, update), watchedRef.current) } : slot;
           }));
-          setSearches((current) => current.map((search) => ({
-            ...search,
-            results: search.results.map((movie) => {
-              const update = byTmdbId.get(movie.tmdbId);
-              return update
-                ? applyWatchedIndexToMovie(applyRatingLookupToMovie(movie, update), watchedRef.current)
-                : movie;
-            }),
-          })));
-
-          pendingIds = ratings
-            .filter((rating) => rating.letterboxdRatingJobId && pendingIds.includes(rating.tmdbId))
-            .map((rating) => rating.tmdbId);
+          setSearch((current) => ({ ...current, results: current.results.map((movie) => {
+            const update = byId.get(movie.tmdbId);
+            return update ? applyWatchedIndexToMovie(applyRatingLookupToMovie(movie, update), watchedRef.current) : movie;
+          }) }));
+          pendingIds = ratings.filter((rating) => rating.letterboxdRatingJobId && pendingIds.includes(rating.tmdbId)).map((rating) => rating.tmdbId);
           if (pendingIds.length === 0) return;
           await wait(2_000, controller.signal);
         }
       } catch (error) {
-        if (controller.signal.aborted) return;
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
       }
     })();
-
     return () => controller.abort();
   }, [pendingRatingKey, ratingsEndpoint]);
 
-  const pendingOverlapSlugs = [
-    ...new Set(
-      overlap.suggestions.flatMap((suggestion) => (
-        !suggestion.tmdbId && suggestion.letterboxdMovieJobId && suggestion.letterboxdSlug
-          ? [suggestion.letterboxdSlug]
-          : []
-      )),
-    ),
-  ].sort((left, right) => left.localeCompare(right));
-  const pendingOverlapKey = pendingOverlapSlugs.join(",");
+  const pendingOverlapKey = [...new Set(overlap.suggestions.flatMap((suggestion) =>
+    !suggestion.tmdbId && suggestion.letterboxdMovieJobId && suggestion.letterboxdSlug ? [suggestion.letterboxdSlug] : [],
+  ))].sort((left, right) => left.localeCompare(right)).join(",");
 
   useEffect(() => {
     if (!pendingOverlapKey) return;
-    const slugs = pendingOverlapKey.split(",");
     const controller = new AbortController();
-
     void (async () => {
       try {
-        let pendingSlugs = slugs;
+        let pendingSlugs = pendingOverlapKey.split(",");
         for (let attempt = 0; attempt < 20 && pendingSlugs.length > 0; attempt += 1) {
           const url = new URL(letterboxdMoviesEndpoint, window.location.origin);
           url.searchParams.set("slugs", pendingSlugs.join(","));
-          const response = await fetch(url, {
-            cache: "no-store",
-            credentials: "same-origin",
-            signal: controller.signal,
-          });
-          const body: unknown = await response.json().catch(() => null);
-          const lookups = parseLetterboxdMovieLookupsResponse(body);
-          if (!lookups) {
-            await wait(2_000, controller.signal);
-            continue;
-          }
-
-          const bySlug = new Map(
-            lookups.map((lookup) => [lookup.letterboxdSlug.toLowerCase(), lookup]),
-          );
-          setOverlap((current) => ({
-            ...current,
-            suggestions: current.suggestions.map((suggestion) => {
-              const lookup = suggestion.letterboxdSlug
-                ? bySlug.get(suggestion.letterboxdSlug.toLowerCase())
-                : undefined;
-              return lookup
-                ? applyLetterboxdMovieLookupToSuggestion(suggestion, lookup)
-                : suggestion;
-            }),
-          }));
-
-          pendingSlugs = lookups
-            .filter((lookup) => lookup.letterboxdMovieJobId && pendingSlugs.includes(lookup.letterboxdSlug))
-            .map((lookup) => lookup.letterboxdSlug);
+          const response = await fetch(url, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+          const lookups = parseLetterboxdMovieLookupsResponse(await response.json().catch(() => null));
+          if (!lookups) { await wait(2_000, controller.signal); continue; }
+          const bySlug = new Map(lookups.map((lookup) => [lookup.letterboxdSlug.toLowerCase(), lookup]));
+          setOverlap((current) => ({ ...current, suggestions: current.suggestions.map((suggestion) => {
+            const lookup = suggestion.letterboxdSlug ? bySlug.get(suggestion.letterboxdSlug.toLowerCase()) : undefined;
+            return lookup ? applyLetterboxdMovieLookupToSuggestion(suggestion, lookup) : suggestion;
+          }) }));
+          pendingSlugs = lookups.filter((lookup) => lookup.letterboxdMovieJobId && pendingSlugs.includes(lookup.letterboxdSlug)).map((lookup) => lookup.letterboxdSlug);
           if (pendingSlugs.length === 0) return;
           await wait(2_000, controller.signal);
         }
       } catch (error) {
-        if (controller.signal.aborted) return;
-        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
       }
     })();
-
     return () => controller.abort();
   }, [letterboxdMoviesEndpoint, pendingOverlapKey]);
 
+  const overlapUsers = useMemo(() => {
+    const users = new Map<string, { username: string; label: string }>();
+    for (const suggestion of overlap.suggestions) for (const user of suggestion.presentFor) {
+      users.set(user.username.toLowerCase(), { username: user.username, label: user.displayName || user.username });
+    }
+    return [...users.values()].sort((left, right) => left.label.localeCompare(right.label));
+  }, [overlap.suggestions]);
+  const visibleOverlapSuggestions = useMemo(() => filterAndSortOverlapSuggestions(overlap.suggestions, overlapSort, {
+    ratingMin: optionalNumber(ratingMin),
+    yearMin: optionalNumber(yearMin), yearMax: optionalNumber(yearMax), usernames: includedUsers,
+  }), [includedUsers, overlap.suggestions, overlapSort, ratingMin, yearMax, yearMin]);
+
   const duplicates = duplicateSelectionIds(slots);
-  const completedSlots = slots.filter((slot) => slot.movie !== null).length;
+  const completedSlots = slots.filter((slot) => slot.movie).length;
   const allSlotsFilled = completedSlots === selectionsPerUser;
-  const submissionReady = allSlotsFilled && duplicates.size === 0 && confirmed;
+  const submissionReady = allSlotsFilled && duplicates.size === 0;
   const acceptedDuplicateWarnings = state.result?.duplicateWarnings.length ?? 0;
+  const isSelected = (tmdbId: number) => slots.some((slot) => slot.movie?.tmdbId === tmdbId);
 
-  function updateSearch(
-    slotIndex: number,
-    update: (current: SlotSearchState) => SlotSearchState,
-  ) {
-    setSearches((current) => current.map(
-      (search, index) => index === searchStateIndex(slotIndex) ? update(search) : search,
-    ));
+  function updateQuery(query: string) {
+    setSearch((current) => ({ ...current, query, status: query.trim() ? "idle" : current.results.length ? "success" : "idle", message: undefined }));
+    setSearchOpen(true);
   }
 
-  function updateQuery(slotIndex: number, query: string) {
-    updateSearch(slotIndex, (search) => ({
-      ...search,
-      query,
-      status: query.trim() ? "idle" : search.results.length > 0 ? "success" : "idle",
-      message: undefined,
-    }));
-  }
-
-  async function searchMovies(slotIndex: number, page = 1) {
-    const current = searches[searchStateIndex(slotIndex)];
-    const query = (page === 1 ? current?.query : current?.submittedQuery || current?.query)?.trim()
-      ?? "";
+  async function searchMovies(page = 1) {
+    const query = (page === 1 ? search.query : search.submittedQuery || search.query).trim();
+    setSearchOpen(true);
     if (query.length < 2) {
-      updateSearch(slotIndex, (search) => ({
-        ...search,
-        status: "error",
-        message: "Enter at least two characters to search.",
-      }));
+      setSearch((current) => ({ ...current, status: "error", message: "Enter at least two characters to search." }));
       return;
     }
-
-    controllers.current.get(slotIndex)?.abort();
+    searchController.current?.abort();
     const controller = new AbortController();
-    controllers.current.set(slotIndex, controller);
-    updateSearch(slotIndex, (search) => ({
-      ...search,
-      status: "loading",
-      message: undefined,
-      page,
-    }));
-
+    searchController.current = controller;
+    setSearch((current) => ({ ...current, status: "loading", message: undefined, page }));
     try {
       const url = new URL(searchEndpoint, window.location.origin);
-      url.searchParams.set("q", query);
-      url.searchParams.set("page", String(page));
-      const response = await fetch(url, {
-        cache: "no-store",
-        credentials: "same-origin",
-        signal: controller.signal,
-      });
+      url.searchParams.set("q", query); url.searchParams.set("page", String(page));
+      const response = await fetch(url, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
       const body: unknown = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(
-          searchErrorMessage(body) ?? "Movie search is unavailable. Please try again.",
-        );
-      }
-
+      if (!response.ok) throw new Error(searchErrorMessage(body) ?? "Movie search is unavailable. Please try again.");
       const parsed = parseMovieSearchResponse(body);
-      if (!parsed) {
-        throw new Error("Movie search returned an unexpected response.");
-      }
-
-      updateSearch(slotIndex, (search) => ({
-        ...search,
-        submittedQuery: query,
-        results: parsed.results.map((movie) => enrichMovie(movie, watchedRef.current)),
-        page: parsed.page,
-        totalPages: parsed.totalPages,
-        status: parsed.results.length > 0 ? "success" : "empty",
-        message: parsed.results.length > 0
-          ? undefined
-          : `No movies found for “${query}”. Try another title.`,
+      if (!parsed) throw new Error("Movie search returned an unexpected response.");
+      setSearch((current) => ({ ...current, submittedQuery: query,
+        results: parsed.results.map((movie) => applyWatchedIndexToMovie(movie, watchedRef.current)),
+        page: parsed.page, totalPages: parsed.totalPages,
+        status: parsed.results.length ? "success" : "empty",
+        message: parsed.results.length ? undefined : `No movies found for “${query}”. Try another title.`,
       }));
     } catch (error) {
-      if (controller.signal.aborted) return;
-      updateSearch(slotIndex, (search) => ({
-        ...search,
-        status: "error",
-        message: error instanceof Error
-          ? error.message
-          : "Movie search is unavailable. Please try again.",
+      if (!controller.signal.aborted) setSearch((current) => ({ ...current, status: "error",
+        message: error instanceof Error ? error.message : "Movie search is unavailable. Please try again.",
       }));
-    } finally {
-      if (controllers.current.get(slotIndex) === controller) {
-        controllers.current.delete(slotIndex);
+    } finally { if (searchController.current === controller) searchController.current = null; }
+  }
+
+  async function loadOverlapPage(page: number, filters: {
+    ratingMin: string;
+    yearMin: string;
+    yearMax: string;
+  } = { ratingMin, yearMin, yearMax }) {
+    overlapPageController.current?.abort();
+    const controller = new AbortController();
+    overlapPageController.current = controller;
+    setOverlapPageLoading(true);
+    setOverlapError(false);
+    try {
+      const result = await pollAsyncResource<ParsedWatchboxdContext>(async ({ signal }) => {
+        const url = new URL(watchboxdEndpoint, window.location.origin);
+        url.searchParams.set("overlapPage", String(page));
+        if (filters.ratingMin) url.searchParams.set("ratingMin", filters.ratingMin);
+        if (filters.yearMin) url.searchParams.set("yearMin", filters.yearMin);
+        if (filters.yearMax) url.searchParams.set("yearMax", filters.yearMax);
+        const response = await fetch(url, {
+          cache: "no-store",
+          credentials: "same-origin",
+          signal,
+        });
+        const body: unknown = await response.json().catch(() => null);
+        const parsed = parseWatchboxdContextResponse(body);
+        if (!parsed) {
+          return response.status === 202
+            ? { status: "pending", retryAfter: 2, jobId: null }
+            : { status: "unavailable", reason: "malformed_response" };
+        }
+        if (response.status === 202 || parsed.status === "pending") {
+          return {
+            status: "pending",
+            retryAfter: parsed.retryAfter,
+            jobId: parsed.pendingJobIds[0] ?? null,
+          };
+        }
+        if (parsed.overlapStatus === "unavailable") {
+          return { status: "unavailable", reason: "http_error" };
+        }
+        return { status: "ready", data: parsed };
+      }, {
+        signal: controller.signal,
+        maxAttempts: 30,
+        timeoutMs: 90_000,
+        maxDelayMs: 10_000,
+      });
+
+      if (result.status !== "ready") {
+        if (result.status !== "cancelled") setOverlapError(true);
+        return;
       }
+      const parsed = result.data;
+      setOverlap((current) => ({
+        eligible: parsed.eligibleForOverlap,
+        status: parsed.overlapStatus,
+        suggestions: parsed.suggestions.map((suggestion) => {
+          const existing = current.suggestions.find((candidate) => (
+            (suggestion.letterboxdSlug && candidate.letterboxdSlug === suggestion.letterboxdSlug)
+            || candidate.letterboxdUrl === suggestion.letterboxdUrl
+          ));
+          return mergeOverlapSuggestion(suggestion, existing);
+        }),
+        page: parsed.overlapPagination.page,
+        totalPages: parsed.overlapPagination.totalPages,
+        total: parsed.overlapPagination.total,
+      }));
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+      setOverlapError(true);
+    } finally {
+      if (overlapPageController.current === controller) overlapPageController.current = null;
+      if (!controller.signal.aborted) setOverlapPageLoading(false);
     }
   }
 
-  function chooseMovie(slotIndex: number, movie: SelectionMovie) {
-    setSlots((current) => current.map(
-      (slot) => slot.slotIndex === slotIndex
-        ? { ...slot, movie: enrichMovie(movie, watchedRef.current) }
-        : slot,
-    ));
-    updateSearch(slotIndex, (search) => ({
-      ...search,
-      editing: false,
-    }));
-    setConfirmed(false);
+  function chooseMovie(movie: SelectionMovie, closeSearch = false) {
+    setSlots((current) => {
+      if (current.some((slot) => slot.movie?.tmdbId === movie.tmdbId)) return current;
+      const openIndex = current.findIndex((slot) => !slot.movie);
+      return openIndex < 0 ? current : current.map((slot, index) => index === openIndex
+        ? { ...slot, movie: applyWatchedIndexToMovie(movie, watchedRef.current) } : slot);
+    });
+    if (closeSearch) setSearchOpen(false);
   }
-
-  function editSlot(slotIndex: number) {
-    updateSearch(slotIndex, (search) => ({
-      ...search,
-      editing: true,
-    }));
-  }
-
   function removeMovie(slotIndex: number) {
-    setSlots((current) => current.map(
-      (slot) => slot.slotIndex === slotIndex ? { ...slot, movie: null } : slot,
-    ));
-    updateSearch(slotIndex, (search) => ({
-      ...search,
-      editing: true,
-    }));
-    setConfirmed(false);
+    setSlots((current) => current.map((slot) => slot.slotIndex === slotIndex ? { ...slot, movie: null } : slot));
+  }
+  function toggleDraftIncludedUser(username: string) {
+    setDraftIncludedUsers((current) => current.includes(username) ? current.filter((user) => user !== username) : [...current, username]);
+  }
+  function openSortTray() {
+    setDraftSort(overlapSort);
+    setControlTray((current) => current === "sort" ? null : "sort");
+  }
+  function openFilterTray() {
+    setDraftRatingMin(ratingMin);
+    setDraftYearMin(yearMin);
+    setDraftYearMax(yearMax);
+    setDraftIncludedUsers(includedUsers);
+    setControlTray((current) => current === "filter" ? null : "filter");
   }
 
-  if (state.status === "success") {
-    return (
-      <section className="panel selection-complete-panel" aria-labelledby="selection-complete-heading">
-        <span className="selection-complete-mark" aria-hidden="true">✓</span>
-        <div>
-          <span className="eyebrow">Selections submitted</span>
-          <h2 id="selection-complete-heading">Your picks are locked in</h2>
-          <p>{state.message ?? "Waiting for everyone else to finish choosing."}</p>
-          {acceptedDuplicateWarnings > 0 ? (
-            <p className="selection-post-submit-warning">
-              {acceptedDuplicateWarnings} of your{" "}
-              {acceptedDuplicateWarnings === 1 ? "movies was" : "movies were"} also
-              chosen by another participant. The duplicate nominations were accepted.
-            </p>
-          ) : null}
-        </div>
-      </section>
-    );
-  }
+  if (state.status === "success" && state.result?.phaseTransitioned) return (
+    <section className="panel selection-complete-panel" aria-labelledby="selection-complete-heading">
+      <span className="selection-complete-mark" aria-hidden="true">✓</span>
+      <div><span className="eyebrow">Selections submitted</span><h2 id="selection-complete-heading">Voting is now open</h2>
+        <p>{state.message ?? "Your selections were submitted and the room has moved to voting."}</p>
+        {acceptedDuplicateWarnings ? <p className="selection-post-submit-warning">{acceptedDuplicateWarnings} of your movies were also chosen by another participant. The duplicate nominations were accepted.</p> : null}
+      </div>
+    </section>
+  );
 
   return (
     <section className="panel selection-panel" aria-labelledby="selection-heading">
       <div className="selection-intro">
-        <div>
-          <span className="eyebrow">Your movie picks</span>
-          <h2 id="selection-heading">Fill every selection slot</h2>
-          <p>
-            Search for a movie, then choose one for each slot.
-            You can start picking before the host locks the roster.
-            Warnings are helpful context unless you pick the same movie twice.
-          </p>
+        <div className="selection-intro-copy"><span className="eyebrow">Your movie picks</span><h2 id="selection-heading">Choose your movies</h2>
+          <p>Search the full movie catalog or browse your group’s shared watchlist picks. Choose {selectionsPerUser} different movies, review them below, then lock them in. Warnings give you context before you decide.</p>
+          {completedSlots > 0 ? <ol className="selection-intro-picks" aria-label="Current movie choices">
+            {slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }) => <li key={slot.slotIndex}>
+              <span className="selection-intro-pick-index">{slot.slotIndex}</span>
+              <strong>{movie.title}</strong>
+              {movie.releaseYear ? <span className="selection-intro-pick-year">{movie.releaseYear}</span> : null}
+              <RatingMarks letterboxdRating={movie.letterboxdRating} />
+            </li>)}
+          </ol> : null}
         </div>
-        <span className="selection-count" aria-live="polite">
-          {completedSlots} / {selectionsPerUser} filled
-        </span>
+        <div className={`selection-count${allSlotsFilled ? " is-complete" : ""}`} aria-live="polite">
+          <strong>{completedSlots}/{selectionsPerUser}</strong><span>{allSlotsFilled ? "Ready to submit" : "choices filled"}</span>
+        </div>
       </div>
 
-      <form
-        action={formAction}
-        className="selection-form"
-        onSubmit={(event) => {
-          if (!submissionReady || pending || submitStarted.current) {
-            event.preventDefault();
-            return;
-          }
-          submitStarted.current = true;
-        }}
-      >
+      <form action={formAction} className="selection-form" onSubmit={(event) => {
+        if (!submissionReady || pending || submitStarted.current) { event.preventDefault(); return; }
+        submitStarted.current = true;
+      }}>
         <input name="code" type="hidden" value={code} />
-        <input
-          name="selections"
-          type="hidden"
-          value={serializeSelectionSubmission(slots)}
-        />
+        <input name="selections" type="hidden" value={serializeSelectionSubmission(slots)} />
 
-        <ol className="selection-slot-list">
-          {slots.map((slot) => {
-            const search = searches[searchStateIndex(slot.slotIndex)];
-            const slotHeadingId = `selection-slot-${slot.slotIndex}`;
-            const duplicate = Boolean(
-              slot.movie && duplicates.has(slot.movie.tmdbId),
-            );
-            const showSuggestions = search.editing
-              && !search.query.trim()
-              && suggestions.length > 0;
-
-            return (
-              <li className="selection-slot" key={slot.slotIndex}>
-                <div className="selection-slot-heading">
-                  <div>
-                    <span>Slot {slot.slotIndex}</span>
-                    <h3 id={slotHeadingId}>
-                      {slot.movie ? slot.movie.title : "Choose a movie"}
-                    </h3>
-                  </div>
-                  {slot.movie ? (
-                    <span className={`selection-slot-status${duplicate ? " is-warning" : ""}`}>
-                      {duplicate ? "Needs attention" : "Filled"}
-                    </span>
-                  ) : (
-                    <span className="selection-slot-status">Open</span>
-                  )}
-                </div>
-
-                {slot.movie ? (
-                  <div className="selected-movie">
-                    <MovieDetails movie={slot.movie} sameUserDuplicate={duplicate} />
-                    <div className="selection-card-actions">
-                      <button
-                        className="button button-secondary button-compact"
-                        type="button"
-                        onClick={() => editSlot(slot.slotIndex)}
-                      >
-                        Replace
-                      </button>
-                      <button
-                        className="text-button remove-selection"
-                        type="button"
-                        onClick={() => removeMovie(slot.slotIndex)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {search.editing ? (
-                  <div
-                    className="movie-search"
-                    role="search"
-                    aria-labelledby={slotHeadingId}
-                  >
-                    <label htmlFor={`movie-search-${slot.slotIndex}`}>
-                      Search movies for slot {slot.slotIndex}
-                    </label>
-                    <div className="movie-search-controls">
-                      <input
-                        id={`movie-search-${slot.slotIndex}`}
-                        value={search.query}
-                        onChange={(event) => updateQuery(slot.slotIndex, event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            void searchMovies(slot.slotIndex);
-                          }
-                        }}
-                        placeholder="Start with a movie title"
-                        autoComplete="off"
-                        aria-describedby={`movie-search-status-${slot.slotIndex}`}
-                      />
-                      <button
-                        className="button button-secondary button-compact"
-                        disabled={search.status === "loading"}
-                        type="button"
-                        onClick={() => void searchMovies(slot.slotIndex)}
-                      >
-                        {search.status === "loading" ? "Searching…" : "Search"}
-                      </button>
-                    </div>
-
-                    <div
-                      id={`movie-search-status-${slot.slotIndex}`}
-                      className={`movie-search-status is-${search.status}`}
-                      role={search.status === "error" ? "alert" : "status"}
-                      aria-live="polite"
-                    >
-                      {search.status === "loading" ? (
-                        <><span className="status-spinner" aria-hidden="true" /> Searching movies…</>
-                      ) : search.message ?? ""}
-                    </div>
-
-                    {showSuggestions ? (
-                      <div className="overlap-suggestions">
-                        <h4>Watchlist overlap suggestions</h4>
-                        <p>Server-provided ideas shared across your crew’s watchlists.</p>
-                        <ul className="movie-result-list">
-                          {suggestions.map((movie) => (
-                            <li key={movie.tmdbId}>
-                              <LetterboxdMovieLink movie={movie}>
-                                <MovieDetails
-                                  movie={movie}
-                                  sameUserDuplicate={slots.some(
-                                    (candidate) => candidate.slotIndex !== slot.slotIndex
-                                      && candidate.movie?.tmdbId === movie.tmdbId,
-                                  )}
-                                />
-                              </LetterboxdMovieLink>
-                              <button
-                                className="button button-secondary button-compact"
-                                type="button"
-                                onClick={() => chooseMovie(slot.slotIndex, movie)}
-                              >
-                                Choose
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-
-                    {search.results.length > 0 && search.status !== "error" ? (
-                      <>
-                        <ul className="movie-result-list" aria-label="Movie search results">
-                          {search.results.map((movie) => {
-                            const selectedElsewhere = slots.some(
-                              (candidate) => candidate.slotIndex !== slot.slotIndex
-                                && candidate.movie?.tmdbId === movie.tmdbId,
-                            );
-                            return (
-                              <li key={movie.tmdbId}>
-                                <LetterboxdMovieLink movie={movie}>
-                                  <MovieDetails
-                                    movie={movie}
-                                    sameUserDuplicate={selectedElsewhere}
-                                  />
-                                </LetterboxdMovieLink>
-                                <button
-                                  className="button button-secondary button-compact"
-                                  type="button"
-                                  onClick={() => chooseMovie(slot.slotIndex, movie)}
-                                >
-                                  {slot.movie ? "Use as replacement" : "Choose"}
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                        {search.totalPages > 1 ? (
-                          <div className="movie-search-pagination">
-                            <button
-                              className="button button-secondary button-compact"
-                              type="button"
-                              disabled={search.page <= 1 || search.status === "loading"}
-                              onClick={() => void searchMovies(slot.slotIndex, search.page - 1)}
-                            >
-                              Previous
-                            </button>
-                            <span aria-live="polite">
-                              Page {search.page} of {search.totalPages}
-                            </span>
-                            <button
-                              className="button button-secondary button-compact"
-                              type="button"
-                              disabled={
-                                search.page >= search.totalPages
-                                || search.status === "loading"
-                              }
-                              onClick={() => void searchMovies(slot.slotIndex, search.page + 1)}
-                            >
-                              Next
-                            </button>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
-
-                    {slot.movie ? (
-                      <button
-                        className="text-button cancel-replacement"
-                        type="button"
-                        onClick={() => updateSearch(slot.slotIndex, (current) => ({
-                          ...current,
-                          editing: false,
-                        }))}
-                      >
-                        Keep {slot.movie.title}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-
-        {overlap.eligible ? (
-          <div className="overlap-suggestions overlap-suggestions-panel">
-            <h3>Watchlist overlap suggestions</h3>
-            <p>Shared watchlist picks for this room, ranked by Watchboxd overlap.</p>
-            {overlap.status === "pending" && overlap.suggestions.length === 0 ? (
-              <p className="overlap-suggestions-status" role="status">
-                Loading shared watchlist picks…
-              </p>
-            ) : overlap.suggestions.length === 0 ? (
-              <p className="overlap-suggestions-status">
-                No shared watchlist movies yet.
-              </p>
-            ) : (
-              <ul className="overlap-suggestion-list">
-                {overlap.suggestions.map((suggestion) => {
-                  const selectable = overlapToSelectionMovie(suggestion);
-                  return (
-                    <li key={suggestion.letterboxdSlug ?? suggestion.letterboxdUrl}>
-                      <a
-                        className="overlap-suggestion-link"
-                        href={suggestion.letterboxdUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Open ${suggestion.title} on Letterboxd`}
-                      >
-                        <MoviePoster
-                          movie={{
-                            title: suggestion.title,
-                            posterUrl: suggestion.posterUrl,
-                            posterPath: suggestion.posterPath,
-                          }}
-                        />
-                        <span className="overlap-suggestion-copy">
-                          <strong>{suggestion.title}</strong>
-                          {suggestion.releaseYear ? <span>{suggestion.releaseYear}</span> : null}
-                        </span>
-                        <span className="overlap-suggestion-meta">
-                          <RatingMarks letterboxdRating={suggestion.letterboxdRating} />
-                          {suggestion.presentFor.length > 0 ? (
-                            <span className="overlap-avatars" title={suggestion.presentFor.map((u) => u.displayName || u.username).join(", ")}>
-                              {suggestion.presentFor.slice(0, 3).map((user) => (
-                                <span key={user.username} className="overlap-avatar">
-                                  {user.avatarUrl ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={user.avatarUrl} alt={user.displayName || user.username} />
-                                  ) : (
-                                    <span className="overlap-avatar-fallback">{(user.displayName || user.username).charAt(0).toUpperCase()}</span>
-                                  )}
-                                </span>
-                              ))}
-                              {suggestion.presentFor.length > 3 ? (
-                                <span className="overlap-avatar overlap-avatar-more">+{suggestion.presentFor.length - 3}</span>
-                              ) : null}
-                            </span>
-                          ) : null}
-                        </span>
-                      </a>
-                      {selectable ? (
-                        <button
-                          className="button button-secondary button-compact"
-                          type="button"
-                          onClick={() => {
-                            const openSlot = slots.find((slot) => slot.movie === null);
-                            if (openSlot) chooseMovie(openSlot.slotIndex, selectable);
-                          }}
-                          disabled={slots.every((slot) => slot.movie !== null)}
-                        >
-                          Choose
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+        <div ref={searchSectionRef} className="selection-search-section" role="search" aria-labelledby="selection-search-heading">
+          <div className="selection-section-heading"><div><span className="eyebrow">Search movies</span><h3 id="selection-search-heading">Find a specific movie</h3></div>
+            <span>{allSlotsFilled ? "All choices filled" : `${selectionsPerUser - completedSlots} remaining`}</span></div>
+          <label className="sr-only" htmlFor="unified-movie-search">Search movies</label>
+          <div className="movie-search-controls">
+            <input id="unified-movie-search" value={search.query} onChange={(event) => updateQuery(event.target.value)}
+              onFocus={() => setSearchOpen(true)} onKeyDown={(event) => {
+                if (event.key === "Enter") { event.preventDefault(); void searchMovies(); }
+                else if (event.key === "Escape") { setSearchOpen(false); event.currentTarget.blur(); }
+              }} placeholder="Search by movie title" autoComplete="off" role="combobox" aria-autocomplete="list" aria-controls="movie-search-tray" aria-expanded={searchOpen} />
+            <button className="button button-secondary button-compact" disabled={search.status === "loading"} type="button" onClick={() => void searchMovies()}>
+              {search.status === "loading" ? "Searching…" : "Search"}
+            </button>
           </div>
-        ) : null}
+          {searchOpen && (search.status !== "idle" || search.results.length > 0) ? (
+            <div id="movie-search-tray" className="movie-search-tray">
+              <div className={`movie-search-status is-${search.status}`} role={search.status === "error" ? "alert" : "status"} aria-live="polite">
+                {search.status === "loading" ? <><span className="status-spinner" aria-hidden="true" /> Searching movies…</> : search.message ?? ""}
+              </div>
+              {search.results.length > 0 && search.status !== "error" ? <>
+                <ul className="movie-result-list" aria-label="Movie search results">{search.results.map((movie) => {
+                  const selected = isSelected(movie.tmdbId);
+                  return <li key={movie.tmdbId}><LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} /></LetterboxdMovieLink>
+                    {selected ? <SelectedCheck title={movie.title} /> : <button className="button button-secondary button-compact" type="button" onClick={() => chooseMovie(movie, true)} disabled={allSlotsFilled}>Choose</button>}
+                  </li>;
+                })}</ul>
+                {search.totalPages > 1 ? <div className="movie-search-pagination">
+                  <button className="button button-secondary button-compact" type="button" disabled={search.page <= 1 || search.status === "loading"} onClick={() => void searchMovies(search.page - 1)}>Previous</button>
+                  <span>Page {search.page} of {search.totalPages}</span>
+                  <button className="button button-secondary button-compact" type="button" disabled={search.page >= search.totalPages || search.status === "loading"} onClick={() => void searchMovies(search.page + 1)}>Next</button>
+                </div> : null}
+              </> : null}
+            </div>
+          ) : null}
+        </div>
+
+        {overlap.status === "idle" || overlap.eligible || overlapError ? <section className="overlap-suggestions overlap-suggestions-panel" aria-labelledby="overlap-heading">
+          <div className="selection-section-heading overlap-heading"><div><span className="eyebrow">From your group</span><h3 id="overlap-heading">Watchlist overlap suggestions</h3>
+            <p>Shared picks, always grouped from most overlap to least overlap.</p></div><span>{overlap.status === "idle" || overlap.status === "pending" ? "Loading" : `${visibleOverlapSuggestions.length} shown`}</span></div>
+          {overlap.suggestions.length > 0 ? <div ref={overlapControlsRef} className="overlap-control-toolbar">
+            <button className={`overlap-control-pill${controlTray === "sort" ? " is-open" : ""}`} type="button" aria-expanded={controlTray === "sort"} onClick={openSortTray}>
+              Sort
+            </button>
+            <button className={`overlap-control-pill${controlTray === "filter" ? " is-open" : ""}${ratingMin || yearMin || yearMax || includedUsers.length ? " has-value" : ""}`} type="button" aria-expanded={controlTray === "filter"} onClick={openFilterTray}>
+              Filter
+            </button>
+            {controlTray === "sort" ? <div className="overlap-control-popover" role="dialog" aria-label="Sort overlap suggestions">
+              <fieldset className="overlap-sort-options"><legend>Sort</legend>
+                {([
+                  ["rating", "Rating: high to low"],
+                  ["runtime", "Runtime: short to long"],
+                  ["year", "Year: newest first"],
+                  ["alphabetical", "Title: A–Z"],
+                ] as const).map(([value, label]) => <label key={value}>
+                  <input type="radio" name="overlap-sort" value={value} checked={draftSort === value} onChange={() => setDraftSort(value)} />
+                  <span>{label}</span>
+                </label>)}
+              </fieldset>
+              <div className="overlap-popover-actions">
+                <button className="text-button" type="button" onClick={() => setControlTray(null)}>Cancel</button>
+                <button className="button button-primary button-compact" type="button" onClick={() => { setOverlapSort(draftSort); setControlTray(null); }}>Confirm</button>
+              </div>
+            </div> : null}
+            {controlTray === "filter" ? <div className="overlap-control-popover is-filter" role="dialog" aria-label="Filter overlap suggestions">
+              <label className="overlap-filter-field"><span>Minimum rating</span>
+                <select value={draftRatingMin} onChange={(event) => setDraftRatingMin(event.target.value)}>
+                  <option value="">Any rating</option>
+                  {Array.from({ length: 10 }, (_, index) => ((index + 1) / 2).toFixed(1)).map((rating) => <option key={rating} value={rating}>{rating} stars and up</option>)}
+                </select>
+              </label>
+              <div className="overlap-filter-field"><span>Release year</span><div className="overlap-filter-year-range">
+                <input aria-label="Earliest year" inputMode="numeric" min="1888" max="2100" placeholder="From" type="number" value={draftYearMin} onChange={(event) => setDraftYearMin(event.target.value)} />
+                <span aria-hidden="true">–</span>
+                <input aria-label="Latest year" inputMode="numeric" min="1888" max="2100" placeholder="To" type="number" value={draftYearMax} onChange={(event) => setDraftYearMax(event.target.value)} />
+              </div></div>
+              {overlapUsers.length > 0 ? <div className="overlap-filter-field"><span>Includes</span><div className="overlap-user-filter" role="group" aria-label="People included in overlap">
+                <button className={draftIncludedUsers.length === 0 ? "is-active" : ""} type="button" onClick={() => setDraftIncludedUsers([])}>Everyone</button>
+                {overlapUsers.map((user) => <button className={draftIncludedUsers.includes(user.username) ? "is-active" : ""} key={user.username} type="button"
+                  aria-pressed={draftIncludedUsers.includes(user.username)} onClick={() => toggleDraftIncludedUser(user.username)}>{user.label}</button>)}
+              </div></div> : null}
+              <div className="overlap-popover-actions">
+                <button className="text-button" type="button" onClick={() => setControlTray(null)}>Cancel</button>
+                <button className="button button-primary button-compact" type="button" onClick={() => {
+                  setRatingMin(draftRatingMin); setYearMin(draftYearMin); setYearMax(draftYearMax);
+                  setIncludedUsers(draftIncludedUsers); setControlTray(null);
+                  void loadOverlapPage(1, {
+                    ratingMin: draftRatingMin,
+                    yearMin: draftYearMin,
+                    yearMax: draftYearMax,
+                  });
+                }}>Confirm</button>
+              </div>
+            </div> : null}
+          </div> : null}
+          {overlapPageLoading ? <p className="overlap-suggestions-status is-loading" role="status"><span className="status-spinner" aria-hidden="true" /> Loading suggestions…</p> : null}
+          {overlapError || overlap.status === "unavailable" ? <p className="overlap-suggestions-status is-warning">Could not get suggestions. Refresh page to try again.</p>
+            : (overlap.status === "idle" || overlap.status === "pending") && overlap.suggestions.length === 0 ? <p className="overlap-suggestions-status is-loading" role="status"><span className="status-spinner" aria-hidden="true" /> Loading shared watchlist picks…</p>
+            : overlap.suggestions.length === 0 ? <p className="overlap-suggestions-status">No shared watchlist movies yet.</p>
+            : visibleOverlapSuggestions.length === 0 ? <p className="overlap-suggestions-status">No suggestions match these filters.</p>
+            : <ul className="overlap-suggestion-list">{visibleOverlapSuggestions.map((suggestion) => {
+              const selectable = overlapToSelectionMovie(suggestion);
+              const selected = selectable ? isSelected(selectable.tmdbId) : false;
+              return <li key={suggestion.letterboxdSlug ?? suggestion.letterboxdUrl}>
+                <a className="overlap-suggestion-link" href={suggestion.letterboxdUrl} target="_blank" rel="noreferrer" aria-label={`Open ${suggestion.title} on Letterboxd`}>
+                  <MoviePoster movie={suggestion} /><span className="overlap-suggestion-copy"><strong>{suggestion.title}</strong><span className="overlap-suggestion-facts">
+                    {suggestion.releaseYear ? <span>{suggestion.releaseYear}</span> : null}{suggestion.runtimeMinutes ? <span>{suggestion.runtimeMinutes} min</span> : null}{suggestion.overlapCount ? <span>{suggestion.overlapCount} watchlists</span> : null}
+                  </span></span><span className="overlap-suggestion-meta"><RatingMarks letterboxdRating={suggestion.letterboxdRating} />
+                    {suggestion.presentFor.length > 0 ? <span className="overlap-avatars" title={suggestion.presentFor.map((user) => user.displayName || user.username).join(", ")}>
+                      {suggestion.presentFor.slice(0, 3).map((user) => <span key={user.username} className="overlap-avatar">{user.avatarUrl
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={user.avatarUrl} alt={user.displayName || user.username} />
+                        : <span className="overlap-avatar-fallback">{(user.displayName || user.username).charAt(0).toUpperCase()}</span>}</span>)}
+                      {suggestion.presentFor.length > 3 ? <span className="overlap-avatar overlap-avatar-more">+{suggestion.presentFor.length - 3}</span> : null}
+                    </span> : null}
+                  </span>
+                </a>
+                {selected ? <SelectedCheck title={suggestion.title} /> : selectable ? <button className="button button-secondary button-compact" type="button" onClick={() => chooseMovie(selectable)} disabled={allSlotsFilled}>Choose</button> : null}
+              </li>;
+            })}</ul>}
+          {overlap.totalPages > 1 ? <div className="overlap-pagination" aria-label="Overlap suggestion pages">
+            <button className="button button-secondary button-compact" type="button" disabled={overlap.page <= 1 || overlapPageLoading} onClick={() => void loadOverlapPage(overlap.page - 1)}>Prev</button>
+            <span aria-live="polite">Page {overlap.page} of {overlap.totalPages}</span>
+            <button className="button button-secondary button-compact" type="button" disabled={overlap.page >= overlap.totalPages || overlapPageLoading} onClick={() => void loadOverlapPage(overlap.page + 1)}>Next</button>
+          </div> : null}
+        </section> : null}
+
+        <section className="selected-selections" aria-labelledby="selected-selections-heading">
+          <div className="selection-section-heading"><div><span className="eyebrow">Your lineup</span><h3 id="selected-selections-heading">Selected movies</h3></div><span>{completedSlots}/{selectionsPerUser}</span></div>
+          {completedSlots === 0 ? <div className="selected-selections-empty">Your choices will appear here as you add them.</div>
+            : <ol className="selected-selections-grid">{slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }) => <li key={slot.slotIndex}>
+              <div className="selected-selections-card-number">Choice {slot.slotIndex}</div><LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} sameUserDuplicate={duplicates.has(movie.tmdbId)} /></LetterboxdMovieLink>
+              <button className="button button-secondary button-compact remove-selection-button" type="button" onClick={() => removeMovie(slot.slotIndex)}>Remove movie</button>
+            </li>)}</ol>}
+        </section>
 
         <div className="selection-submit">
-          <label className="selection-confirmation">
-            <input
-              checked={confirmed}
-              disabled={!allSlotsFilled || duplicates.size > 0 || pending}
-              name="confirmed"
-              required
-              type="checkbox"
-              onChange={(event) => setConfirmed(event.target.checked)}
-            />
-            <span>
-              <strong>Lock these selections permanently</strong>
-              <small>
-                I understand I cannot replace or remove movies after submitting.
-              </small>
-            </span>
-          </label>
-          {!allSlotsFilled ? (
-            <p className="selection-submit-hint">
-              Fill {selectionsPerUser - completedSlots} more{" "}
-              {selectionsPerUser - completedSlots === 1 ? "slot" : "slots"} to continue.
-            </p>
-          ) : duplicates.size > 0 ? (
-            <p className="selection-submit-hint is-error">
-              Replace duplicate movies before submitting.
-            </p>
-          ) : null}
+          {!allSlotsFilled ? <p className="selection-submit-hint">Choose {selectionsPerUser - completedSlots} more {selectionsPerUser - completedSlots === 1 ? "movie" : "movies"} to continue.</p>
+            : duplicates.size > 0 ? <p className="selection-submit-hint is-error">Remove duplicate movies before submitting.</p> : null}
           <ActionMessage status={state.status} message={state.message} />
-          <button
-            className="button button-primary"
-            disabled={!submissionReady || pending}
-            type="submit"
-          >
-            {pending ? "Submitting all selections…" : "Submit all selections"}
-          </button>
+          <button className="button button-primary" disabled={!submissionReady || pending} type="submit">{pending ? "Saving selections…" : hasSubmittedSelections || state.status === "success" ? "Update selections" : "Submit selections"}</button>
         </div>
       </form>
     </section>
