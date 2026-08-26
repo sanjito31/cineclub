@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeEmail, safeNextPath } from "@/lib/validation/shared";
 import type { ActionState } from "@/app/actions/types";
+import { publicConfig } from "@/lib/config/public";
 
 export type MagicLinkActionState = ActionState & {
   email?: string;
@@ -14,7 +15,7 @@ export type MagicLinkActionState = ActionState & {
 
 async function getMagicLinkRedirectUrl(next: string) {
   const requestHeaders = await headers();
-  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const configuredSiteUrl = publicConfig.siteUrl;
   const requestOrigin = requestHeaders.get("origin");
   const siteUrl = configuredSiteUrl || requestOrigin;
 

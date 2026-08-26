@@ -4,16 +4,35 @@ Cineclub is a room-based movie nomination, voting, and reveal app. Chunk 1 inclu
 
 ## Environment
 
-In addition to the Prisma database URLs, set these values in `.env.local` from the Supabase project Connect/API settings:
+Copy `.env.example` to `.env.local` and set these values from the Supabase
+project Connect/API settings:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-DATABASE_URL=postgresql://your-runtime-pooler-url
-DIRECT_URL=postgresql://your-migration-url
+DB_USERNAME=app_runtime
+DB_PASSWORD=your-database-password
 TMDB_API_READ_ACCESS_TOKEN=your-server-side-tmdb-read-token
 ```
+
+`lib/config/database.ts` URL-encodes the credentials and builds both connection
+strings. Runtime Prisma traffic uses the Supavisor transaction pooler on port
+6543 with `pgbouncer=true`, while Prisma CLI and migrations use the same
+Supavisor host in session mode on port 5432 without that parameter. Despite the
+Prisma environment variable name `DIRECT_URL`, this is a session-pooler URL,
+not Supabase's `db.<project-ref>` direct endpoint. `DB_NAME` defaults to
+`postgres`, `SUPABASE_DB_REGION` defaults to `us-west-2`, and the database base
+domain defaults to `supabase.com`. The project reference is derived from
+`NEXT_PUBLIC_SUPABASE_URL`; `SUPABASE_PROJECT_REF` and `SUPABASE_PROJECT_URL`
+remain available as optional overrides.
+
+Enter `DB_PASSWORD` as the raw password; the URL builder safely encodes special
+characters when it creates each connection string.
+
+Existing `DATABASE_URL` and `DIRECT_URL` values remain supported as individual
+overrides, which is useful for custom connection endpoints and credential
+rotation.
 
 The publishable key is designed for browser use. Never put a Supabase secret/service-role key in a `NEXT_PUBLIC_` variable.
 

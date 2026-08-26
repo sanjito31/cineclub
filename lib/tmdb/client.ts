@@ -9,10 +9,10 @@ import {
   type TmdbMovieSearchResult,
   type TmdbSearchOptions,
 } from "@/lib/tmdb/core";
+import { serverConfig } from "@/lib/config/server";
 
 function readEnvironment() {
-  const readAccessToken = process.env.TMDB_API_READ_ACCESS_TOKEN?.trim();
-  const apiKey = process.env.TMDB_API_KEY?.trim();
+  const { readAccessToken, apiKey, baseUrl } = serverConfig.tmdb;
 
   if (!readAccessToken && !apiKey) {
     throw new TmdbServiceError(
@@ -24,7 +24,7 @@ function readEnvironment() {
   return {
     readAccessToken,
     apiKey,
-    baseUrl: process.env.TMDB_API_URL?.trim() || undefined,
+    baseUrl,
   };
 }
 

@@ -6,6 +6,7 @@ import {
   type WatchboxdDecoder,
   type WatchboxdRequestOptions,
 } from "@/lib/watchboxd/core";
+import { serverConfig } from "@/lib/config/server";
 
 export type WatchboxdProfile = {
   username: string;
@@ -40,7 +41,7 @@ function readProfile(value: unknown): WatchboxdProfile | null {
 
 function createClient() {
   return new WatchboxdClient({
-    baseUrl: process.env.WATCHBOXD_API_URL?.trim() || undefined,
+    baseUrl: serverConfig.watchboxd.baseUrl,
   });
 }
 
