@@ -198,8 +198,8 @@ export function toSelectionMovie(input: {
   };
 }
 
-export function tmdbMovieUrl(tmdbId: number) {
-  return `https://www.themoviedb.org/movie/${tmdbId}`;
+export function letterboxdMovieUrlFromTmdbId(tmdbId: number) {
+  return `https://letterboxd.com/tmdb/${tmdbId}/`;
 }
 
 export function tmdbPosterUrl(posterPath: string) {
@@ -415,12 +415,19 @@ export function parseLetterboxdMovieLookupsResponse(value: unknown) {
 }
 
 export function applyWatchedIndexToMovie(movie: SelectionMovie, index: WatchedIndex): SelectionMovie {
-  const watchedByMembers = watchedMembersForMovie(index, {
+  const indexedMembers = watchedMembersForMovie(index, {
     tmdbId: movie.tmdbId,
     title: movie.title,
     releaseYear: movie.releaseYear,
     letterboxdSlug: movie.letterboxdSlug,
   });
+  const watchedByMembers = [...movie.watchedByMembers];
+  for (const member of indexedMembers) {
+    if (watchedByMembers.some((candidate) => candidate.userId === member.userId)) {
+      continue;
+    }
+    watchedByMembers.push(member);
+  }
   return {
     ...movie,
     watchedByMembers,

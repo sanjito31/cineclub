@@ -262,10 +262,6 @@ button { color: inherit; }
   letter-spacing: .01em;
   line-height: 1;
 }
-.rating-badge.tmdb-rating {
-  border-color: #5eb6ea;
-  background: rgb(26 111 191 / 35%);
-}
 .rating-badge.letterboxd-rating {
   border-color: #5cff8f;
   background: rgb(26 163 74 / 35%);

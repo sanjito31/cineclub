@@ -57,6 +57,28 @@ export type WatchboxdOverlapPage = {
   enrichment?: WatchboxdEnrichment | null;
 };
 
+export type WatchboxdWatchedBy = WatchboxdListUser & {
+  userRating: number | null;
+};
+
+export type WatchboxdWatchedOverlapFilm = WatchboxdMovie & {
+  watchedBy: WatchboxdWatchedBy[];
+  watchedCount: number;
+  partySize: number;
+};
+
+export type WatchboxdWatchedOverlapPage = {
+  users: WatchboxdListUser[];
+  films: WatchboxdWatchedOverlapFilm[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+  enrichment?: WatchboxdEnrichment | null;
+};
+
 export type WatchboxdJob = {
   id: string;
   type: string | null;
@@ -186,7 +208,10 @@ export function decodeWatchboxdMovie(value: unknown): WatchboxdMovie | null {
     letterboxdRating: optionalRating(movie.letterboxdRating),
     letterboxdSlug,
     letterboxdUrl,
-    posterUrl: optionalHttpsUrl(movie.posterUrl) ?? optionalHttpsUrl(movie.sourcePosterUrl),
+    posterUrl:
+      optionalHttpsUrl(movie.posterUrl)
+      ?? optionalHttpsUrl(movie.letterboxdPoster)
+      ?? optionalHttpsUrl(movie.sourcePosterUrl),
     resolutionStatus: optionalString(movie.resolutionStatus),
   };
 }
@@ -302,6 +327,62 @@ export function decodeWatchboxdOverlapPage(value: unknown): WatchboxdOverlapPage
     users,
     films: data.films.flatMap((film) => {
       const decoded = decodeWatchboxdOverlapFilm(film);
+      return decoded ? [decoded] : [];
+    }),
+    pagination: decodePagination(data.pagination, data.films.length),
+    enrichment: decodeWatchboxdEnrichment(envelopeMeta(value)),
+  };
+}
+
+export function decodeWatchboxdWatchedOverlapFilm(
+  value: unknown,
+): WatchboxdWatchedOverlapFilm | null {
+  const record = asRecord(value);
+  const movie = decodeWatchboxdMovie(record) ?? decodeWatchboxdMovie(record?.movie);
+  if (!record || !movie || !Array.isArray(record.watchedBy)) return null;
+
+  const watchedBy = record.watchedBy.flatMap((watcher: unknown) => {
+    const user = decodeWatchboxdListUser(watcher);
+    if (!user) return [];
+    return [{
+      ...user,
+      userRating: optionalRating(asRecord(watcher)?.userRating),
+    }];
+  });
+  const watchedCount = optionalFiniteNumber(record.watchedCount);
+  const partySize = optionalFiniteNumber(record.partySize);
+
+  return {
+    ...movie,
+    watchedBy,
+    watchedCount:
+      watchedCount !== null && Number.isInteger(watchedCount) && watchedCount >= 0
+        ? watchedCount
+        : watchedBy.length,
+    partySize:
+      partySize !== null && Number.isInteger(partySize) && partySize >= watchedBy.length
+        ? partySize
+        : watchedBy.length,
+  };
+}
+
+export function decodeWatchboxdWatchedOverlapPage(
+  value: unknown,
+): WatchboxdWatchedOverlapPage | null {
+  const data = envelopeData(value);
+  if (!data || !Array.isArray(data.films)) return null;
+
+  const users = Array.isArray(data.users)
+    ? data.users.flatMap((user) => {
+        const decoded = decodeWatchboxdListUser(user);
+        return decoded ? [decoded] : [];
+      })
+    : [];
+
+  return {
+    users,
+    films: data.films.flatMap((film) => {
+      const decoded = decodeWatchboxdWatchedOverlapFilm(film);
       return decoded ? [decoded] : [];
     }),
     pagination: decodePagination(data.pagination, data.films.length),

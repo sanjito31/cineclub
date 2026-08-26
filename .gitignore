@@ -42,3 +42,4 @@ env
 next-env.d.ts
 
 /app/generated/prisma
+api-reference.md

@@ -8,11 +8,12 @@ import {
   overlapToSelectionMovie,
   parseMovieSearchResponse,
   serializeSelectionSubmission,
-  tmdbMovieUrl,
+  letterboxdMovieUrlFromTmdbId,
   toSelectionMovie,
   type SelectionMovie,
 } from "../app/rooms/[code]/selection-contracts";
 import {
+  addWatchedOverlapPageToIndex,
   addWatchedPageToIndex,
   applyLetterboxdMovieLookupToSuggestion,
   applyTmdbDetailsToOverlapSuggestion,
@@ -45,8 +46,11 @@ function movie(tmdbId: number, title: string): SelectionMovie {
   };
 }
 
-test("search results point at the matching TMDB movie page", () => {
-  assert.equal(tmdbMovieUrl(550), "https://www.themoviedb.org/movie/550");
+test("search results use Letterboxd's TMDB-id redirect", () => {
+  assert.equal(
+    letterboxdMovieUrlFromTmdbId(550),
+    "https://letterboxd.com/tmdb/550/",
+  );
 });
 
 test("selection slots match the room requirement exactly", () => {
@@ -209,7 +213,10 @@ test("watched members are matched by TMDB id including the current user", () => 
   assert.equal(members.length, 2);
   assert.equal(members[0]?.isCurrentUser, true);
   assert.equal(members[1]?.displayName, "Bob");
-  assert.equal(watchedWarningCopy(members), "1 other has seen this already…");
+  assert.equal(
+    watchedWarningCopy(members),
+    "2 people in this room have watched this already.",
+  );
   assert.equal(
     watchedWarningCopy(members.filter((member) => member.isCurrentUser)),
     "You’ve already watched this.",
@@ -219,13 +226,29 @@ test("watched members are matched by TMDB id including the current user", () => 
       { userId: "user-2", displayName: "Bob", avatarUrl: null, isCurrentUser: false },
       { userId: "user-3", displayName: "Cara", avatarUrl: null, isCurrentUser: false },
     ]),
-    "2 others have seen this already…",
+    "2 people in this room have watched this already.",
   );
 
   const enriched = applyWatchedIndexToMovie(movie(550, "Fight Club"), index);
   assert.equal(enriched.watchedByCurrentUser, true);
   assert.equal(enriched.watchedByMembers.length, 2);
   assert.equal(watchedMembersForMovie(index, { tmdbId: 101 }).length, 0);
+
+  const searchResultWithBob = {
+    ...movie(550, "Fight Club"),
+    watchedByMembers: [
+      { userId: "user-2", displayName: "Bob", avatarUrl: null, isCurrentUser: false },
+    ],
+  };
+  const merged = applyWatchedIndexToMovie(searchResultWithBob, index);
+  assert.deepEqual(
+    merged.watchedByMembers.map((member) => member.displayName),
+    ["Bob", "Alice"],
+  );
+  assert.equal(
+    watchedWarningCopy(merged.watchedByMembers),
+    "2 people in this room have watched this already.",
+  );
 });
 
 test("watched warnings match unresolved Watchboxd titles by title and year", () => {
@@ -259,10 +282,77 @@ test("watched warnings match unresolved Watchboxd titles by title and year", () 
   assert.equal(selected.watchedByMembers.length, 1);
   assert.equal(selected.watchedByMembers[0]?.displayName, "Bob");
   assert.equal(selected.watchedByCurrentUser, false);
-  assert.equal(watchedWarningCopy(selected.watchedByMembers), "1 other has seen this already…");
+  assert.equal(
+    watchedWarningCopy(selected.watchedByMembers),
+    "1 person in this room has watched this already.",
+  );
   assert.equal(
     watchedMembersForMovie(index, { tmdbId: 550, title: "Fight Club", releaseYear: 2000 }).length,
     0,
+  );
+});
+
+test("watched union attribution becomes selection warnings for room members", () => {
+  const index = emptyWatchedIndex();
+  addWatchedOverlapPageToIndex(
+    index,
+    {
+      users: [
+        { username: "alice", displayName: "Alice", avatarUrl: null },
+        { username: "bob", displayName: "Bob", avatarUrl: null },
+      ],
+      films: [{
+        tmdbId: 550,
+        title: "Fight Club",
+        year: 1999,
+        letterboxdRating: 4.27,
+        letterboxdSlug: "fight-club",
+        letterboxdUrl: "https://letterboxd.com/film/fight-club/",
+        posterUrl: null,
+        resolutionStatus: null,
+        watchedBy: [
+          {
+            username: "alice",
+            displayName: "Alice",
+            avatarUrl: "https://a.ltrbxd.com/alice.jpg",
+            userRating: 4.5,
+          },
+          {
+            username: "bob",
+            displayName: "Bob",
+            avatarUrl: null,
+            userRating: null,
+          },
+        ],
+        watchedCount: 2,
+        partySize: 2,
+      }],
+      pagination: { page: 1, pageSize: 100, total: 1, totalPages: 1 },
+    },
+    [
+      {
+        userId: "user-1",
+        displayName: "Alice",
+        letterboxdUsername: "alice",
+      },
+      {
+        userId: "user-2",
+        displayName: "Bob",
+        letterboxdUsername: "bob",
+      },
+    ],
+    "user-1",
+  );
+
+  const selected = applyWatchedIndexToMovie(movie(550, "Fight Club"), index);
+  assert.equal(selected.watchedByCurrentUser, true);
+  assert.deepEqual(
+    selected.watchedByMembers.map((member) => member.displayName),
+    ["Alice", "Bob"],
+  );
+  assert.equal(
+    watchedWarningCopy(selected.watchedByMembers),
+    "2 people in this room have watched this already.",
   );
 });
 
@@ -401,4 +491,3 @@ test("pending Letterboxd ratings silently fill once Watchboxd is ready", () => {
   assert.equal(ready.letterboxdUrl, "https://letterboxd.com/film/fight-club/");
   assert.equal(ready.tmdbRating, 8.4);
 });
-

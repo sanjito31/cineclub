@@ -15,6 +15,7 @@ import {
   applyWatchedIndexToMovie,
   createSelectionSlots,
   duplicateSelectionIds,
+  letterboxdMovieUrlFromTmdbId,
   moviePosterSrc,
   overlapToSelectionMovie,
   parseLetterboxdMovieLookupsResponse,
@@ -22,7 +23,6 @@ import {
   parseMovieSearchResponse,
   parseWatchboxdContextResponse,
   serializeSelectionSubmission,
-  tmdbMovieUrl,
 } from "@/app/rooms/[code]/selection-contracts";
 import type {
   OverlapSuggestion,
@@ -85,7 +85,7 @@ function wait(milliseconds: number, signal: AbortSignal) {
   });
 }
 
-function TmdbResultLink({
+function LetterboxdMovieLink({
   movie,
   children,
 }: {
@@ -95,10 +95,10 @@ function TmdbResultLink({
   return (
     <a
       className="selection-movie-tmdb-link"
-      href={tmdbMovieUrl(movie.tmdbId)}
+      href={letterboxdMovieUrlFromTmdbId(movie.tmdbId)}
       target="_blank"
       rel="noreferrer"
-      aria-label={`Open ${movie.title} on TMDB`}
+      aria-label={`Open ${movie.title} on Letterboxd`}
     >
       {children}
     </a>
@@ -188,22 +188,12 @@ function RatingBadge({
 }
 
 function RatingMarks({
-  tmdbRating,
   letterboxdRating,
 }: {
-  tmdbRating?: number | null;
   letterboxdRating?: number | null;
 }) {
   return (
     <span className="selection-rating-marks">
-      {tmdbRating !== null && tmdbRating !== undefined ? (
-        <RatingBadge
-          className="tmdb-rating"
-          src="/tmdb.svg"
-          value={tmdbRating}
-          label={`TMDB rating ${tmdbRating.toFixed(1)} out of 10`}
-        />
-      ) : null}
       {letterboxdRating !== null && letterboxdRating !== undefined ? (
         <RatingBadge
           className="letterboxd-rating"
@@ -234,7 +224,6 @@ function MovieDetails({
             {movie.releaseYear ? <span>{movie.releaseYear}</span> : null}
           </div>
           <RatingMarks
-            tmdbRating={movie.tmdbRating}
             letterboxdRating={movie.letterboxdRating}
           />
         </div>
@@ -704,7 +693,7 @@ export function MovieSelection({
           <span className="eyebrow">Your movie picks</span>
           <h2 id="selection-heading">Fill every selection slot</h2>
           <p>
-            Search TMDB through Cineclub, then choose one movie for each slot.
+            Search for a movie, then choose one for each slot.
             You can start picking before the host locks the roster.
             Warnings are helpful context unless you pick the same movie twice.
           </p>
@@ -790,7 +779,7 @@ export function MovieSelection({
                     aria-labelledby={slotHeadingId}
                   >
                     <label htmlFor={`movie-search-${slot.slotIndex}`}>
-                      Search TMDB for slot {slot.slotIndex}
+                      Search movies for slot {slot.slotIndex}
                     </label>
                     <div className="movie-search-controls">
                       <input
@@ -835,7 +824,7 @@ export function MovieSelection({
                         <ul className="movie-result-list">
                           {suggestions.map((movie) => (
                             <li key={movie.tmdbId}>
-                              <TmdbResultLink movie={movie}>
+                              <LetterboxdMovieLink movie={movie}>
                                 <MovieDetails
                                   movie={movie}
                                   sameUserDuplicate={slots.some(
@@ -843,7 +832,7 @@ export function MovieSelection({
                                       && candidate.movie?.tmdbId === movie.tmdbId,
                                   )}
                                 />
-                              </TmdbResultLink>
+                              </LetterboxdMovieLink>
                               <button
                                 className="button button-secondary button-compact"
                                 type="button"
@@ -867,12 +856,12 @@ export function MovieSelection({
                             );
                             return (
                               <li key={movie.tmdbId}>
-                                <TmdbResultLink movie={movie}>
+                                <LetterboxdMovieLink movie={movie}>
                                   <MovieDetails
                                     movie={movie}
                                     sameUserDuplicate={selectedElsewhere}
                                   />
-                                </TmdbResultLink>
+                                </LetterboxdMovieLink>
                                 <button
                                   className="button button-secondary button-compact"
                                   type="button"

@@ -2,6 +2,7 @@ import { normalizeLetterboxdUsername } from "@/lib/validation/shared";
 import type {
   WatchboxdCollectionPage,
   WatchboxdOverlapFilm,
+  WatchboxdWatchedOverlapPage,
   WatchboxdWatchedItem,
 } from "@/lib/watchboxd/decode";
 
@@ -267,6 +268,52 @@ export function addWatchedPageToIndex(
   return index;
 }
 
+export function addWatchedOverlapPageToIndex(
+  index: WatchedIndex,
+  page: WatchboxdWatchedOverlapPage,
+  members: readonly RoomLetterboxdMember[],
+  currentUserId: string,
+) {
+  const memberByUsername = new Map(
+    members.map((member) => [member.letterboxdUsername.toLowerCase(), member]),
+  );
+  const currentUsername = members.find(
+    (member) => member.userId === currentUserId,
+  )?.letterboxdUsername.toLowerCase();
+
+  for (const film of page.films) {
+    for (const watcher of film.watchedBy) {
+      const normalizedUsername = watcher.username.toLowerCase();
+      const member = memberByUsername.get(normalizedUsername);
+
+      const watchedMember: WatchedMember = {
+        userId: member?.userId ?? `letterboxd:${normalizedUsername}`,
+        displayName: member?.displayName ?? watcher.displayName ?? watcher.username,
+        avatarUrl: watcher.avatarUrl,
+        isCurrentUser:
+          member?.userId === currentUserId
+          || normalizedUsername === currentUsername,
+      };
+      if (film.tmdbId) {
+        appendWatchedMember(index.byTmdbId, String(film.tmdbId), watchedMember);
+      }
+      if (film.letterboxdSlug) {
+        appendWatchedMember(
+          index.bySlug,
+          film.letterboxdSlug.toLowerCase(),
+          watchedMember,
+        );
+      }
+      const titleYearKey = movieTitleYearKey(film.title, film.year);
+      if (titleYearKey) {
+        appendWatchedMember(index.byTitleYear, titleYearKey, watchedMember);
+      }
+    }
+  }
+
+  return index;
+}
+
 export function watchedMembersForMovie(
   index: WatchedIndex,
   movie: {
@@ -296,14 +343,13 @@ export function watchedMembersForMovie(
 export function watchedWarningCopy(members: readonly WatchedMember[]) {
   if (members.length === 0) return null;
 
-  const others = members.filter((member) => !member.isCurrentUser);
-  if (others.length === 0) {
+  if (members.length === 1 && members[0]?.isCurrentUser) {
     return "You’ve already watched this.";
   }
-  if (others.length === 1) {
-    return "1 other has seen this already…";
+  if (members.length === 1) {
+    return "1 person in this room has watched this already.";
   }
-  return `${others.length} others have seen this already…`;
+  return `${members.length} people in this room have watched this already.`;
 }
 
 export function limitOverlapSuggestions(

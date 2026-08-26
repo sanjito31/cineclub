@@ -19,6 +19,7 @@ import {
   decodeWatchboxdJob,
   decodeWatchboxdMovie,
   decodeWatchboxdOverlapPage,
+  decodeWatchboxdWatchedOverlapPage,
   decodeWatchboxdWatchedPage,
   decodeWatchboxdWatchlistPage,
 } from "../lib/watchboxd/decode";
@@ -442,6 +443,9 @@ test("Watchboxd client uses documented collection, overlap, and job routes", asy
   await client.watchlist("alice", decodeItems, { query: { cursor: "next" } });
   await client.watchedHistory("alice", decodeItems);
   await client.overlap(["alice", "bob", "alice"], decodeItems);
+  await client.watchedOverlap(["alice", "bob", "alice"], decodeItems, {
+    query: { tmdbId: "550" },
+  });
   await client.job("job-123", decodeItems);
   await client.movie(550, decodeItems);
   await client.movieByLetterboxdSlug("fight-club", decodeItems);
@@ -451,9 +455,12 @@ test("Watchboxd client uses documented collection, overlap, and job routes", asy
   assert.equal(requests[1]?.pathname, "/api/v1/users/alice/watched");
   assert.equal(requests[2]?.pathname, "/api/v1/overlap");
   assert.equal(requests[2]?.searchParams.get("users"), "alice,bob");
-  assert.equal(requests[3]?.pathname, "/api/v1/jobs/job-123");
-  assert.equal(requests[4]?.pathname, "/api/v1/movies/550");
-  assert.equal(requests[5]?.pathname, "/api/v1/movies/letterboxd/fight-club");
+  assert.equal(requests[3]?.pathname, "/api/v1/overlap/watched");
+  assert.equal(requests[3]?.searchParams.get("users"), "alice,bob");
+  assert.equal(requests[3]?.searchParams.get("tmdbId"), "550");
+  assert.equal(requests[4]?.pathname, "/api/v1/jobs/job-123");
+  assert.equal(requests[5]?.pathname, "/api/v1/movies/550");
+  assert.equal(requests[6]?.pathname, "/api/v1/movies/letterboxd/fight-club");
 });
 
 test("Watchboxd overlap validates unique username bounds", () => {
@@ -463,6 +470,10 @@ test("Watchboxd overlap validates unique username bounds", () => {
 
   assert.throws(
     () => client.overlap(["alice", "alice"], () => null),
+    WatchboxdInputError,
+  );
+  assert.throws(
+    () => client.watchedOverlap(["alice", "alice"], () => null),
     WatchboxdInputError,
   );
   assert.throws(
@@ -564,6 +575,50 @@ test("Watchboxd movie, watched, overlap, and job decoders accept live envelopes"
   assert.equal(overlap?.films[0]?.letterboxdRating, 4.24);
   assert.equal(overlap?.enrichment ?? null, null);
 
+  const watchedOverlap = decodeWatchboxdWatchedOverlapPage({
+    data: {
+      users: [
+        { username: "alice", displayName: "Alice", avatarUrl: null },
+        { username: "bob", displayName: "Bob", avatarUrl: null },
+      ],
+      films: [{
+        title: "Fight Club",
+        year: 1999,
+        tmdbId: 550,
+        letterboxdRating: 4.27,
+        letterboxdSlug: "fight-club",
+        letterboxdPoster: "https://a.ltrbxd.com/poster.jpg",
+        watchedBy: [
+          {
+            username: "alice",
+            displayName: "Alice",
+            avatarUrl: "https://a.ltrbxd.com/alice.jpg",
+            userRating: 4.5,
+          },
+          {
+            username: "bob",
+            displayName: "Bob",
+            avatarUrl: null,
+            userRating: null,
+          },
+        ],
+        watchedCount: 2,
+        partySize: 2,
+      }],
+      pagination: { page: 1, pageSize: 10, total: 1, totalPages: 1 },
+    },
+    meta: {
+      enrichment: { complete: true, pendingSlugs: [], failedSlugs: [] },
+    },
+  });
+  assert.equal(watchedOverlap?.films[0]?.tmdbId, 550);
+  assert.equal(watchedOverlap?.films[0]?.posterUrl, "https://a.ltrbxd.com/poster.jpg");
+  assert.equal(watchedOverlap?.films[0]?.watchedBy.length, 2);
+  assert.equal(watchedOverlap?.films[0]?.watchedBy[0]?.userRating, 4.5);
+  assert.equal(watchedOverlap?.films[0]?.watchedCount, 2);
+  assert.equal(watchedOverlap?.films[0]?.partySize, 2);
+  assert.equal(watchedOverlap?.enrichment?.complete, true);
+
   assert.deepEqual(
     decodeWatchboxdJob({
       data: {
@@ -626,4 +681,3 @@ test("watchlist pages stay ready while child movies are still enriching", async 
     assert.equal(result.data.items[0]?.tmdbId, null);
   }
 });
-

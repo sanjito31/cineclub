@@ -102,6 +102,14 @@ export function getWatchboxdOverlap<T>(
   return createClient().overlap(usernames, decode, options);
 }
 
+export function getWatchboxdWatchedOverlap<T>(
+  usernames: readonly string[],
+  decode: WatchboxdDecoder<T>,
+  options?: WatchboxdRequestOptions,
+): Promise<AsyncResourceResult<T>> {
+  return createClient().watchedOverlap(usernames, decode, options);
+}
+
 export function getWatchboxdJob<T>(
   jobId: string,
   decode: WatchboxdDecoder<T>,

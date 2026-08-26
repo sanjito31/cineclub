@@ -199,6 +199,21 @@ export class WatchboxdClient {
     });
   }
 
+  watchedOverlap<T>(
+    usernames: readonly string[],
+    decode: WatchboxdDecoder<T>,
+    options?: WatchboxdRequestOptions,
+  ) {
+    const normalized = [...new Set(usernames.map(normalizeUsername))];
+    if (normalized.length < 2 || normalized.length > 10) {
+      throw new WatchboxdInputError("Watchboxd watched overlap requires 2 to 10 unique usernames.");
+    }
+
+    return this.request("/api/v1/overlap/watched", decode, options, (url) => {
+      url.searchParams.set("users", normalized.join(","));
+    });
+  }
+
   job<T>(
     jobId: string,
     decode: WatchboxdDecoder<T>,

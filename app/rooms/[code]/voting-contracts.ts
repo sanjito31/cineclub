@@ -1,6 +1,6 @@
 import type { ActionState } from "@/app/actions/types";
 import type { RoomPhase } from "@/app/generated/prisma/enums";
-import { moviePosterSrc, tmdbMovieUrl, tmdbPosterUrl } from "@/app/rooms/[code]/selection-contracts";
+import { moviePosterSrc, tmdbPosterUrl } from "@/app/rooms/[code]/selection-contracts";
 import {
   isParticipantCoverageSatisfied,
   participantIdsCoveredByMovies,
@@ -10,7 +10,7 @@ import {
   type BallotValidationErrorCode,
 } from "@/lib/domain/voting";
 
-export { moviePosterSrc, tmdbMovieUrl, tmdbPosterUrl };
+export { moviePosterSrc, tmdbPosterUrl };
 export {
   isParticipantCoverageSatisfied,
   participantIdsCoveredByMovies,

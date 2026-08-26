@@ -25,7 +25,7 @@ export async function GET(
   );
   if (tmdbIds.length === 0) {
     return noStoreJson(
-      { error: "Provide one or more TMDB movie IDs." },
+      { error: "Provide one or more valid movie IDs." },
       { status: 400 },
     );
   }

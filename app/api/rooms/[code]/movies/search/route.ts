@@ -1,8 +1,14 @@
-import { toSelectionMovie } from "@/app/rooms/[code]/selection-contracts";
+import {
+  applyWatchedIndexToMovie,
+  toSelectionMovie,
+} from "@/app/rooms/[code]/selection-contracts";
 import { noStoreJson, requireRoomMemberApi } from "@/app/api/rooms/[code]/member-request";
 import { AuthorizationError, DomainError } from "@/lib/auth/errors";
 import { listRoomMovieNominationSummaries } from "@/lib/data/nominations";
-import { lookupWatchboxdMovies } from "@/lib/data/watchboxd-room";
+import {
+  lookupRoomWatchedIndex,
+  lookupWatchboxdMovies,
+} from "@/lib/data/watchboxd-room";
 import {
   MAXIMUM_SEARCH_PAGE,
   normalizeSearchPage,
@@ -36,7 +42,15 @@ function tmdbErrorResponse(error: TmdbServiceError) {
     ? { "Retry-After": String(error.retryAfter) }
     : undefined;
 
-  return noStoreJson({ error: error.message, code: error.code }, { status, headers });
+  const message = error.code === "invalid_query"
+    ? error.message
+    : error.code === "timeout"
+      ? "Movie search took too long. Please try again."
+      : error.code === "aborted"
+        ? "Movie search was cancelled."
+        : "Movie search is unavailable right now.";
+
+  return noStoreJson({ error: message, code: error.code }, { status, headers });
 }
 
 export async function GET(
@@ -72,9 +86,15 @@ export async function GET(
     });
     const paginated = paginateTmdbSearchPage(tmdbPage, searchPage);
     const tmdbIds = paginated.results.map((movie) => movie.tmdbId);
-    const [summaries, ratings] = await Promise.all([
+    const [summaries, ratings, watched] = await Promise.all([
       listRoomMovieNominationSummaries(access.room.id, tmdbIds),
       lookupWatchboxdMovies(tmdbIds, request.signal),
+      lookupRoomWatchedIndex({
+        participants: access.room.participants,
+        currentUserId: access.user.id,
+        tmdbIds,
+        signal: request.signal,
+      }),
     ]);
     const extrasByTmdbId = new Map(
       summaries.map((summary) => [summary.tmdbId, summary]),
@@ -87,7 +107,7 @@ export async function GET(
       results: paginated.results.map((movie) => {
         const extras = extrasByTmdbId.get(movie.tmdbId);
         const rating = ratingsByTmdbId.get(movie.tmdbId);
-        return toSelectionMovie({
+        return applyWatchedIndexToMovie(toSelectionMovie({
           tmdbId: movie.tmdbId,
           title: movie.title,
           releaseYear: movie.releaseYear,
@@ -100,7 +120,7 @@ export async function GET(
           letterboxdSlug: rating?.letterboxdSlug ?? null,
           posterUrl: rating?.posterUrl ?? null,
           alreadyNominatedBy: extras && extras.nominatedBy.length > 0 ? ["other"] : [],
-        });
+        }), watched);
       }),
       suggestions: [],
       page: paginated.page,

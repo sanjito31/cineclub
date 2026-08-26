@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  addWatchedOverlapPageToIndex,
   addWatchedPageToIndex,
   applyLetterboxdMovieLookupToSuggestion,
   applyTmdbDetailsToOverlapSuggestion,
@@ -19,12 +20,14 @@ import { getTmdbMovie } from "@/lib/tmdb/client";
 import {
   decodeWatchboxdMovie,
   decodeWatchboxdOverlapPage,
+  decodeWatchboxdWatchedOverlapPage,
   decodeWatchboxdWatchedPage,
 } from "@/lib/watchboxd/decode";
 import {
   getWatchboxdMovie,
   getWatchboxdMovieByLetterboxdSlug,
   getWatchboxdOverlap,
+  getWatchboxdWatchedOverlap,
   getWatchboxdWatchedHistory,
 } from "@/lib/watchboxd/client";
 import { WatchboxdInputError } from "@/lib/watchboxd/core";
@@ -96,6 +99,54 @@ async function loadWatchedPages(username: string, signal?: AbortSignal) {
   };
 }
 
+async function loadWatchedOverlapPages(
+  usernames: readonly string[],
+  signal?: AbortSignal,
+) {
+  const first = await getWatchboxdWatchedOverlap(
+    usernames,
+    decodeWatchboxdWatchedOverlapPage,
+    {
+      query: { page: "1", pageSize: String(WATCHED_PAGE_SIZE) },
+      signal,
+    },
+  );
+  if (first.status !== "ready") return first;
+
+  const pages = [first.data];
+  const totalPages = Math.min(first.data.pagination.totalPages, MAXIMUM_WATCHED_PAGES);
+  if (totalPages <= 1) return first;
+
+  const remaining = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      getWatchboxdWatchedOverlap(
+        usernames,
+        decodeWatchboxdWatchedOverlapPage,
+        {
+          query: {
+            page: String(index + 2),
+            pageSize: String(WATCHED_PAGE_SIZE),
+          },
+          signal,
+        },
+      ),
+    ),
+  );
+
+  for (const page of remaining) {
+    if (page.status === "pending") return page;
+    if (page.status === "ready") pages.push(page.data);
+  }
+
+  return {
+    status: "ready" as const,
+    data: {
+      ...first.data,
+      films: pages.flatMap((page) => page.films),
+    },
+  };
+}
+
 export async function lookupWatchboxdMovies(
   tmdbIds: readonly number[],
   signal?: AbortSignal,
@@ -147,6 +198,83 @@ export async function lookupWatchboxdMovies(
   );
 
   return lookups;
+}
+
+export async function lookupRoomWatchedIndex(input: {
+  participants: readonly {
+    userId: string;
+    letterboxdUsernameSnapshot?: string | null;
+    user?: { displayName?: string | null; letterboxdUsername?: string | null };
+  }[];
+  currentUserId: string;
+  tmdbIds: readonly number[];
+  signal?: AbortSignal;
+}): Promise<WatchedIndex> {
+  const watched = emptyWatchedIndex();
+  const members = collectRoomLetterboxdMembers(input.participants);
+  const tmdbIds = [...new Set(
+    input.tmdbIds.filter((tmdbId) => Number.isSafeInteger(tmdbId) && tmdbId > 0),
+  )];
+  if (members.length === 0 || tmdbIds.length === 0) return watched;
+
+  if (members.length >= 2) {
+    const usernames = members.map((member) => member.letterboxdUsername);
+    const results = await Promise.all(
+      tmdbIds.map(async (tmdbId) => {
+        try {
+          return await getWatchboxdWatchedOverlap(
+            usernames,
+            decodeWatchboxdWatchedOverlapPage,
+            {
+              query: { tmdbId: String(tmdbId), page: "1", pageSize: "1" },
+              signal: input.signal,
+            },
+          );
+        } catch {
+          return null;
+        }
+      }),
+    );
+    for (const result of results) {
+      if (result?.status !== "ready") continue;
+      addWatchedOverlapPageToIndex(
+        watched,
+        result.data,
+        members,
+        input.currentUserId,
+      );
+    }
+    return watched;
+  }
+
+  const member = members[0];
+  const results = await Promise.all(
+    tmdbIds.map(async (tmdbId) => {
+      try {
+        return await getWatchboxdWatchedHistory(
+          member.letterboxdUsername,
+          decodeWatchboxdWatchedPage,
+          {
+            query: { tmdbId: String(tmdbId), page: "1", pageSize: "1" },
+            signal: input.signal,
+          },
+        );
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const watchedMember: WatchedMember = {
+    userId: member.userId,
+    displayName: member.displayName,
+    avatarUrl: null,
+    isCurrentUser: true,
+  };
+  for (const result of results) {
+    if (result?.status !== "ready") continue;
+    addWatchedPageToIndex(watched, result.data, watchedMember);
+  }
+  return watched;
 }
 
 async function tmdbSnapshotForId(tmdbId: number | null, signal?: AbortSignal) {
@@ -276,38 +404,42 @@ export async function loadRoomWatchboxdContext(input: {
   const watchedPendingJobIds: string[] = [];
   let retryAfter: number | null = null;
 
-  const watchedResults = await Promise.all(
-    members.map(async (member) => {
-      try {
-        const result = await loadWatchedPages(member.letterboxdUsername, input.signal);
-        return { member, result };
-      } catch {
-        return {
-          member,
-          result: {
-            status: "unavailable" as const,
-            reason: "network_error" as const,
-          },
-        };
+  if (members.length >= 2) {
+    try {
+      const result = await loadWatchedOverlapPages(usernames, input.signal);
+      if (isPendingResult(result)) {
+        if (result.jobId) watchedPendingJobIds.push(result.jobId);
+        retryAfter = Math.max(retryAfter ?? 0, result.retryAfter);
+      } else if (result.status === "ready") {
+        addWatchedOverlapPageToIndex(
+          watched,
+          result.data,
+          members,
+          input.currentUserId,
+        );
       }
-    }),
-  );
-
-  for (const { member, result } of watchedResults) {
-    if (isPendingResult(result)) {
-      if (result.jobId) watchedPendingJobIds.push(result.jobId);
-      retryAfter = Math.max(retryAfter ?? 0, result.retryAfter);
-      continue;
+    } catch {
+      // Watched history is warning-only context; watchlist overlap can still load.
     }
-    if (result.status !== "ready") continue;
-
-    const watchedMember: WatchedMember = {
-      userId: member.userId,
-      displayName: member.displayName,
-      avatarUrl: result.data.user?.avatarUrl ?? null,
-      isCurrentUser: member.userId === input.currentUserId,
-    };
-    addWatchedPageToIndex(watched, result.data, watchedMember);
+  } else if (members.length === 1) {
+    const member = members[0];
+    try {
+      const result = await loadWatchedPages(member.letterboxdUsername, input.signal);
+      if (isPendingResult(result)) {
+        if (result.jobId) watchedPendingJobIds.push(result.jobId);
+        retryAfter = Math.max(retryAfter ?? 0, result.retryAfter);
+      } else if (result.status === "ready") {
+        const watchedMember: WatchedMember = {
+          userId: member.userId,
+          displayName: member.displayName,
+          avatarUrl: result.data.user?.avatarUrl ?? null,
+          isCurrentUser: member.userId === input.currentUserId,
+        };
+        addWatchedPageToIndex(watched, result.data, watchedMember);
+      }
+    } catch {
+      // Watched history is warning-only context.
+    }
   }
 
   const eligibleForOverlap = usernames.length >= 2;
