@@ -124,7 +124,7 @@ function VotingLockedInPanel({
   copy: string;
 }) {
   return (
-    <section className="panel selection-complete-panel" aria-labelledby={headingId}>
+    <section className="panel selection-complete-panel voting-locked-panel" aria-labelledby={headingId}>
       <span className="selection-complete-mark" aria-hidden="true">✓</span>
       <div>
         <span className="eyebrow">Ballot submitted</span>
@@ -314,7 +314,7 @@ export function MovieVoting({
   const remainingMinimum = Math.max(0, requiredRankingCount - rankedCount);
   const submissionReady = minimumMet && coverageSatisfied && confirmed;
   const showRankList = !requireParticipantCoverage || coverageSatisfied;
-  const roomProgressLabel = isOwner ? "Host Controls" : "Room Info";
+  const roomProgressLabel = isOwner ? "Host Controls" : "Club Info";
 
   function updateRanking(nextIds: string[]) {
     setRankedIds(nextIds);
@@ -338,8 +338,8 @@ export function MovieVoting({
         copy={
           state.message
           ?? (movedOn
-            ? "The room is moving on to finalizing."
-            : `Waiting for remaining voters. Open ${roomProgressLabel} to follow room progress.`)
+            ? "The club is moving on to finalizing."
+            : `Waiting for remaining voters. Open ${roomProgressLabel} to follow club progress.`)
         }
       />
     );
@@ -348,7 +348,16 @@ export function MovieVoting({
   return (
     <section className="panel selection-panel voting-panel" aria-labelledby="voting-heading">
       <div className="selection-intro">
+        <span className="title-card-tag title-card-tag-left">Official ballot</span>
         <div>
+          <svg className="voting-ballot-icon" viewBox="0 0 64 48" fill="none" aria-hidden="true">
+            <rect x="4" y="30" width="14" height="12" rx="3" />
+            <rect x="14" y="18" width="22" height="22" rx="10" />
+            <rect x="19" y="10" width="5" height="11" rx="2.5" />
+            <rect x="26" y="9" width="5" height="12" rx="2.5" />
+            <rect x="33" y="10" width="5" height="11" rx="2.5" />
+            <rect x="36" y="19" width="26" height="10" rx="5" />
+          </svg>
           <span className="eyebrow">Ranked voting</span>
           <h2 id="voting-heading">
             {requireParticipantCoverage ? "Cover every person, then rank" : "Rank the movies"}
@@ -364,6 +373,12 @@ export function MovieVoting({
             ? `${coveredCount} / ${participantCount} covered`
             : `${rankedCount} / ${movieCount} ranked`}
         </span>
+      </div>
+      <div className="title-card-bar voting-title-card-bar" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
       </div>
 
       <p className="voting-minimum" aria-live="polite">

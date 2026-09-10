@@ -1,32 +1,94 @@
+"use client";
+
+import { useEffect, useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/app/components/site-header";
+import { IntroSplash } from "@/app/components/intro-splash";
+
+const SPLASH_SESSION_KEY = "cineclub-intro-seen";
+
+// runs before paint (client-only) so a repeat visit within the same
+// browser session never flashes the splash before hiding it -- the intro
+// should only ever play once per session, the very first time you land
+// on the homepage.
+function useIsomorphicLayoutEffect(
+  effect: React.EffectCallback,
+  deps?: React.DependencyList,
+) {
+  const use = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+  use(effect, deps);
+}
 
 export default function Home() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  useIsomorphicLayoutEffect(() => {
+    try {
+      if (sessionStorage.getItem(SPLASH_SESSION_KEY)) {
+        setShowSplash(false);
+      } else {
+        sessionStorage.setItem(SPLASH_SESSION_KEY, "1");
+      }
+    } catch {
+      // sessionStorage unavailable (private browsing, etc.) -- fall back
+      // to always showing the splash rather than throwing.
+    }
+  }, []);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const prevHtmlOverflow = html.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+    };
+  }, []);
+
   return (
     <div className="home-page">
+      {showSplash && <IntroSplash onDone={() => setShowSplash(false)} />}
       <SiteHeader />
       <main>
         <section className="hero">
           <div className="hero-copy">
-            <span className="eyebrow">Everyone gets a pick</span>
-            <h1>Movie night,<br /><em>finally decided.</em></h1>
-            <p>Build a shared shortlist, rank the room’s favorites, and reveal the winners one suspenseful night at a time.</p>
+            <p className="subtext">Because picking the movie with friends shouldn&apos;t take longer than watching it.</p>
+            <h1 className="tagline"><span className="tagline-light">Stop scrolling.</span><br /><span className="tagline-emphasis">Start watching.</span></h1>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/create">Create a room <span>→</span></Link>
+              <Link className="button button-primary" href="/create">Create a club <span>→</span></Link>
               <Link className="button button-secondary" href="/join">Join with a code</Link>
             </div>
           </div>
-          <div className="poster-stack" aria-hidden="true">
-            <div className="poster poster-one"><span>01</span><strong>Choose</strong><small>Bring your favorites</small></div>
-            <div className="poster poster-two"><span>02</span><strong>Rank</strong><small>Every voice counts</small></div>
-            <div className="poster poster-three"><span>03</span><strong>Reveal</strong><small>No spoilers</small></div>
+        </section>
+        <div className="brand-bar" aria-hidden="true">
+          <div className="brand-bar-stripes">
+            <span className="stripe-yellow"></span>
+            <span className="stripe-teal"></span>
+            <span className="stripe-green"></span>
+            <span className="stripe-purple"></span>
+            <h2 className="brand-bar-wordmark">Cineclub</h2>
           </div>
-        </section>
-        <section className="how-it-works">
-          <div><span>01</span><h2>Gather the crew</h2><p>Share one short room code. Friends join after a quick email sign-in.</p></div>
-          <div><span>02</span><h2>Build the ballot</h2><p>Nominate movies without losing duplicate picks or who chose what.</p></div>
-          <div><span>03</span><h2>Let suspense win</h2><p>Rank together, then let the host reveal the final lineup over time.</p></div>
-        </section>
+          <div className="brand-bar-accent">
+            <div className="color-bar-main">
+              <span className="bar-white"></span>
+              <span className="bar-yellow"></span>
+              <span className="bar-cyan"></span>
+              <span className="bar-green"></span>
+              <span className="bar-magenta"></span>
+              <span className="bar-red"></span>
+              <span className="bar-blue"></span>
+            </div>
+            <div className="color-bar-registration">
+              <span className="reg-navy"></span>
+              <span className="reg-white"></span>
+              <span className="reg-purple"></span>
+              <span className="reg-black"></span>
+              <span className="reg-static"></span>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );

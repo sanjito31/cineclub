@@ -80,6 +80,13 @@ function RevealedMovieCard({
     <article
       className={`reveal-movie-card${featured ? " is-featured" : ""}${animate ? " is-animating" : ""}`}
     >
+      {featured ? (
+        <div className="reveal-marquee" aria-hidden="true">
+          <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
+          <span className="reveal-marquee-label">✷ Now Revealing ✷</span>
+          <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
+        </div>
+      ) : null}
       {featured ? <RevealedPoster movie={movie} large /> : <RevealedPoster movie={movie} />}
       <div className="reveal-movie-copy">
         <span className="eyebrow">
@@ -302,7 +309,7 @@ export function MovieReveal({
       </section>
 
       {history.length > 0 ? (
-        <section className="panel" aria-labelledby="reveal-history-heading">
+        <section className="panel reveal-history-panel" aria-labelledby="reveal-history-heading">
           <div className="section-heading">
             <div>
               <span className="eyebrow">Already shown</span>

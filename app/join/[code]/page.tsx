@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { JoinRoomForm } from "@/app/join/[code]/join-room-form";
+import { PageNav } from "@/app/components/page-nav";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { getRoomPreview } from "@/lib/data/rooms";
@@ -17,7 +18,7 @@ export default async function JoinRoomPage({
   const { code: rawCode } = await params;
   const code = normalizeRoomCode(rawCode);
 
-  if (!code) return <InvalidRoom message="That room code is not valid." />;
+  if (!code) return <InvalidRoom message="That club code is not valid." />;
 
   const user = await requireUserOrRedirect(`/join/${code}`);
   const profile = await getProfile(user.id);
@@ -27,7 +28,7 @@ export default async function JoinRoomPage({
   try {
     room = await getRoomPreview(code, user.id);
   } catch (error) {
-    return <InvalidRoom message={error instanceof Error ? error.message : "Unable to find that room."} />;
+    return <InvalidRoom message={error instanceof Error ? error.message : "Unable to find that club."} />;
   }
 
   if (room.isMember) redirect(roomTaskPath(room.code, room.phase));
@@ -35,8 +36,9 @@ export default async function JoinRoomPage({
 
   return (
     <main className="centered-page">
+      <PageNav backHref="/join" showAccountNav />
       <section className="auth-card wide-card">
-        <span className="eyebrow">Room found</span>
+        <span className="eyebrow">Club found</span>
         <h1>{room.name}</h1>
         <p className="lede">Hosted by {room.ownerName}</p>
         <div className="room-preview-meta">
@@ -44,7 +46,7 @@ export default async function JoinRoomPage({
           <span>Code {room.code}</span>
         </div>
         {unavailable ? (
-          <p className="action-message is-error">This room is no longer accepting participants.</p>
+          <p className="action-message is-error">This club is no longer accepting participants.</p>
         ) : (
           <JoinRoomForm code={room.code} />
         )}
@@ -57,9 +59,10 @@ export default async function JoinRoomPage({
 function InvalidRoom({ message }: { message: string }) {
   return (
     <main className="centered-page">
+      <PageNav backHref="/join" showAccountNav />
       <section className="auth-card">
         <span className="eyebrow">No screening here</span>
-        <h1>Room not found</h1>
+        <h1>Club not found</h1>
         <p className="lede">{message}</p>
         <Link className="button button-primary" href="/join">Try another code</Link>
       </section>

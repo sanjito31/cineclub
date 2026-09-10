@@ -58,10 +58,10 @@ export default async function RoomPage({
     <main className="lobby-page">
       {query.created === "1" ? <ClearRoomDraft /> : null}
       <header className="lobby-header">
-        <Link className="brand" href="/dashboard"><span className="brand-mark">C</span><span>Cineclub</span></Link>
+        <Link className="back-link" href="/dashboard">← Back</Link>
         <nav className="dashboard-nav" aria-label="Navigation">
           <Link href="/profile">Profile</Link>
-          <Link href="/dashboard">Rooms</Link>
+          <Link href="/dashboard">Clubs</Link>
           <form action={signOut}><button className="text-button" type="submit">Sign out</button></form>
         </nav>
       </header>
@@ -71,7 +71,7 @@ export default async function RoomPage({
           <h1>{room.name}</h1>
         </div>
         <div className="room-code-card room-code-card-compact">
-          <span>Room code</span>
+          <span>Club code</span>
           <strong>{room.code}</strong>
           {!rosterLocked ? <ShareControls code={room.code} /> : null}
         </div>
@@ -152,7 +152,7 @@ export default async function RoomPage({
         </div>
         <aside className="lobby-sidebar">
           <section className="panel room-rules">
-            <h2>Room Rules</h2>
+            <h2>Club Rules</h2>
             <dl>
               <div><dt>Movies per person</dt><dd>{room.selectionsPerUser}</dd></div>
               <div><dt>Participant coverage</dt><dd>{room.requireParticipantCoverage ? "Required" : "Optional"}</dd></div>
@@ -161,9 +161,9 @@ export default async function RoomPage({
             </dl>
             <p className="muted-copy">
               {isOwner
-                ? "As host, you control the room settings and roster."
+                ? "As host, you control the club settings and roster."
                 : rosterLocked
-                  ? "The participant list is final. Follow the room progress here."
+                  ? "The participant list is final. Follow the club progress here."
                   : "Share the invite link while the host gathers the rest of the crew."}
             </p>
           </section>

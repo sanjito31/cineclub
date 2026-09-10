@@ -13,10 +13,10 @@ export default async function ProfilePage() {
   return (
     <main className="centered-page">
       <header className="lobby-header">
-        <Link className="brand" href="/dashboard"><span className="brand-mark">C</span><span>Cineclub</span></Link>
+        <Link className="back-link" href="/dashboard">← Back</Link>
         <nav className="dashboard-nav" aria-label="Navigation">
           <Link href="/profile">Profile</Link>
-          <Link href="/dashboard">Rooms</Link>
+          <Link href="/dashboard">Clubs</Link>
           <form action={signOut}><button className="text-button" type="submit">Sign out</button></form>
         </nav>
       </header>

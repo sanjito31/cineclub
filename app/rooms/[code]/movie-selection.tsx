@@ -489,17 +489,22 @@ export function MovieSelection({
   }
 
   if (state.status === "success" && state.result?.phaseTransitioned) return (
-    <section className="panel selection-complete-panel" aria-labelledby="selection-complete-heading">
+    <section className="panel selection-complete-panel nomination-locked-panel" aria-labelledby="selection-complete-heading">
       <span className="selection-complete-mark" aria-hidden="true">✓</span>
       <div><span className="eyebrow">Selections submitted</span><h2 id="selection-complete-heading">Voting is now open</h2>
-        <p>{state.message ?? "Your selections were submitted and the room has moved to voting."}</p>
+        <p>{state.message ?? "Your selections were submitted and the club has moved to voting."}</p>
         {acceptedDuplicateWarnings ? <p className="selection-post-submit-warning">{acceptedDuplicateWarnings} of your movies were also chosen by another participant. The duplicate nominations were accepted.</p> : null}
       </div>
     </section>
   );
 
   return (
-    <section className="panel selection-panel" aria-labelledby="selection-heading">
+    <section className="panel selection-panel nomination-panel" aria-labelledby="selection-heading">
+      <div className="nomination-marquee" aria-hidden="true">
+        <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
+        <span className="nomination-marquee-label">✷ Box Office Open ✷</span>
+        <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
+      </div>
       <div className="selection-intro">
         <div className="selection-intro-copy"><span className="eyebrow">Your movie picks</span><h2 id="selection-heading">Choose your movies</h2>
           <p>Search the full movie catalog or browse your group’s shared watchlist picks. Choose {selectionsPerUser} different movies, review them below, then lock them in. Warnings give you context before you decide.</p>
@@ -653,10 +658,21 @@ export function MovieSelection({
         <section className="selected-selections" aria-labelledby="selected-selections-heading">
           <div className="selection-section-heading"><div><span className="eyebrow">Your lineup</span><h3 id="selected-selections-heading">Selected movies</h3></div><span>{completedSlots}/{selectionsPerUser}</span></div>
           {completedSlots === 0 ? <div className="selected-selections-empty">Your choices will appear here as you add them.</div>
-            : <ol className="selected-selections-grid">{slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }) => <li key={slot.slotIndex}>
-              <div className="selected-selections-card-number">Choice {slot.slotIndex}</div><LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} sameUserDuplicate={duplicates.has(movie.tmdbId)} /></LetterboxdMovieLink>
-              <button className="button button-secondary button-compact remove-selection-button" type="button" onClick={() => removeMovie(slot.slotIndex)}>Remove movie</button>
-            </li>)}</ol>}
+            : <ol className="selected-selections-grid">{slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }, ticketIndex) => {
+              const serial = String((movie.tmdbId * 48271) % 900000 + 100000);
+              return <li key={slot.slotIndex} className="selection-ticket-wrap">
+                <div className={`selection-ticket ticket-color-${(ticketIndex % 6) + 1}`}>
+                  <span className="selection-ticket-serial selection-ticket-serial-left" aria-hidden="true">{serial}</span>
+                  <div className="selection-ticket-inner">
+                    <div className="selection-ticket-head">★★★ CINECLUB ★★★</div>
+                    <LetterboxdMovieLink movie={movie}><span className="selection-ticket-title">{movie.title}</span></LetterboxdMovieLink>
+                    {movie.releaseYear ? <span className="selection-ticket-year">{movie.releaseYear}</span> : null}
+                  </div>
+                  <span className="selection-ticket-serial selection-ticket-serial-right" aria-hidden="true">{serial}</span>
+                </div>
+                <button className="text-button selection-ticket-remove" type="button" onClick={() => removeMovie(slot.slotIndex)}>Remove movie</button>
+              </li>;
+            })}</ol>}
         </section>
 
         <div className="selection-submit">

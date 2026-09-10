@@ -64,12 +64,12 @@ export function HostControlsCard({
   return (
     <section className="panel host-settings-card">
       <span className="eyebrow">Host controls</span>
-      <h2>Room Settings</h2>
+      <h2>Club Settings</h2>
 
       <form action={doRename} className="settings-form">
         <input name="code" type="hidden" value={code} />
         <div className="setting-row">
-          <label htmlFor="roomName">Room name</label>
+          <label htmlFor="roomName">Club name</label>
           <div className="setting-rename">
             <input
               id="roomName"
@@ -180,7 +180,7 @@ export function HostControlsCard({
         {canRevert ? (
           confirmRevert ? (
             <div className="danger-zone-confirm">
-              <p>This will revert the room to {revertLabel?.toLowerCase()}. All progress from the current phase will be lost.</p>
+              <p>This will revert the club to {revertLabel?.toLowerCase()}. All progress from the current phase will be lost.</p>
               <div className="danger-zone-actions">
                 <form action={doRevert}>
                   <input name="code" type="hidden" value={code} />
@@ -204,7 +204,7 @@ export function HostControlsCard({
             </div>
           ) : (
             <div className="setting-row">
-              <span className="danger-zone-label">Revert room to {revertLabel?.toLowerCase()}</span>
+              <span className="danger-zone-label">Revert club to {revertLabel?.toLowerCase()}</span>
               <button
                 className="button button-danger-outline button-xs"
                 onClick={() => setConfirmRevert(true)}
@@ -217,7 +217,7 @@ export function HostControlsCard({
         ) : null}
         {confirmDelete ? (
           <div className="danger-zone-confirm">
-            <p>This will permanently delete the room, all nominations, votes, and results. This cannot be undone.</p>
+            <p>This will permanently delete the club, all nominations, votes, and results. This cannot be undone.</p>
             <div className="danger-zone-actions">
               <form action={doDelete}>
                 <input name="code" type="hidden" value={code} />
@@ -226,7 +226,7 @@ export function HostControlsCard({
                   disabled={deletePending}
                   type="submit"
                 >
-                  {deletePending ? "Deleting…" : "Yes, delete this room"}
+                  {deletePending ? "Deleting…" : "Yes, delete this club"}
                 </button>
               </form>
               <button
@@ -243,13 +243,13 @@ export function HostControlsCard({
           </div>
         ) : (
           <div className="setting-row">
-            <span className="danger-zone-label">Delete this room permanently</span>
+            <span className="danger-zone-label">Delete this club permanently</span>
             <button
               className="button button-danger-outline button-xs"
               onClick={() => setConfirmDelete(true)}
               type="button"
             >
-              Delete room
+              Delete club
             </button>
           </div>
         )}

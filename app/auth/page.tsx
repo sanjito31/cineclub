@@ -25,17 +25,14 @@ export default async function AuthPage({
   }
 
   return (
-    <main className="centered-page">
-      <section className="auth-card">
-        <Link className="back-link" href="/">← Back to Cineclub</Link>
-        <span className="eyebrow">Your seat is waiting</span>
-        <h1>Sign in with email</h1>
-        <p className="lede">We’ll send a one-time sign-in link. No passwords to remember between movie nights.</p>
+    <main className="tv-page">
+      <div className="tv-page-header">
+        <Link className="back-link" href="/">← Back</Link>
         {invalidLink ? (
           <p className="action-message is-error" role="alert">That sign-in link is invalid or expired. Request a new link below.</p>
         ) : null}
-        <AuthForm next={next} />
-      </section>
+      </div>
+      <AuthForm next={next} />
     </main>
   );
 }
