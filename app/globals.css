@@ -378,8 +378,8 @@ button { color: inherit; }
 .content-page .panel {
   position: relative;
   --ink: #b3241c;
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg');
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg');
   background-repeat: repeat, repeat;
   background-size: 420px 420px, 420px 420px;
   border: 6px solid #1a1310;
@@ -447,8 +447,8 @@ button { color: inherit; }
   --line: rgba(26, 19, 16, .2);
   position: sticky; top: 24px; padding: 34px 28px 28px; border: 3px solid #1a1310; border-radius: 0;
   color: var(--ink);
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg'), radial-gradient(rgba(12, 8, 6, .03) 1px, transparent 1.4px);
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg'), radial-gradient(rgba(12, 8, 6, .03) 1px, transparent 1.4px);
   background-repeat: repeat, repeat, repeat;
   background-blend-mode: normal, normal, normal;
   background-size: 420px 420px, 420px 420px, 5px 5px;
@@ -477,8 +477,8 @@ button { color: inherit; }
 .form-station {
   --muted: #9c4a3a;
   margin: 0; padding: 30px 28px; border: 0; border-radius: 0;
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg');
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg');
   background-repeat: repeat, repeat;
   background-size: 420px 420px, 420px 420px;
   box-shadow: none;
@@ -1026,8 +1026,8 @@ button { color: inherit; }
   --ink: #2a1c14;
   --muted: #6b4a3a;
   --line: rgba(26, 19, 16, .22);
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg');
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg');
   background-repeat: repeat, repeat;
   background-size: 420px 420px, 420px 420px;
   border: 5px solid #1a1310;
@@ -1085,8 +1085,8 @@ button { color: inherit; }
   --ink: #2a1c14;
   --muted: #6b4a3a;
   --line: rgba(26, 19, 16, .22);
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg');
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg');
   background-repeat: repeat, repeat;
   background-size: 420px 420px, 420px 420px;
   border: 5px solid #1a1310;
@@ -1121,8 +1121,8 @@ button { color: inherit; }
   margin: 0;
   border: 5px solid #1a1310;
   border-radius: 0;
-  background-color: #cec1b7;
-  background-image: linear-gradient(rgba(255, 253, 246, .84), rgba(255, 253, 246, .84)), url('/textures/paper-kraft.jpg');
+  background-color: #e6d3ae;
+  background-image: linear-gradient(rgba(244, 232, 208, .58), rgba(244, 232, 208, .58)), url('/textures/paper-kraft.jpg');
   background-repeat: repeat, repeat;
   background-size: 420px 420px, 420px 420px;
   box-shadow: 0 20px 55px rgba(58, 47, 30, .22);
