@@ -111,7 +111,16 @@ body::before {
   background-size: 220px 220px;
 }
 img { max-width: 100%; }
-html { min-height: 100%; background: var(--paper); overscroll-behavior-y: none; }
+html { min-height: 100%; background: var(--paper); overscroll-behavior-y: none;
+  /* iOS Safari silently boosts font-size on text it judges "reading
+     content" (headings in a narrow column are a prime target),
+     independent of any CSS clamp()/vw sizing -- so a heading can
+     measure correctly in every desktop or Android tool and still
+     overflow its card only on a real iPhone. This opts every page
+     out of that autosizing sitewide. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body { margin: 0; min-height: 100%; color: var(--ink); background: var(--paper); font-family: Arial, Helvetica, sans-serif; overscroll-behavior-y: none; }
 a { color: inherit; text-decoration: none; }
 button, input { font: inherit; }
@@ -3185,7 +3194,7 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
 .tv-wall--join .tv-headline-tile .tv-ident-strip,
 .tv-wall--join .tv-headline-tile .tv-dot-strip { margin-left: 0; }
 .tv-wall--join .tv-headline-tile .tv-code-entry { margin-top: 0; flex-shrink: 0; max-width: 340px; }
-.tv-headline-text { margin: 0; font-family: var(--font-tagline); font-weight: 800; font-size: clamp(20px, min(5vw, 4.4vh), 40px); line-height: 1.08; letter-spacing: -.01em; text-transform: uppercase; color: #f4ede1; text-align: center; -webkit-text-stroke: .7px #0c0806; paint-order: stroke fill; text-shadow: -1px -1px 0 #0c0806, 1px -1px 0 #0c0806, -1px 1px 0 #0c0806, 1px 1px 0 #0c0806; }
+.tv-headline-text { margin: 0; font-family: var(--font-tagline); font-weight: 800; font-size: clamp(20px, min(5vw, 4.4vh), 40px); line-height: 1.08; letter-spacing: -.01em; text-transform: uppercase; color: #f4ede1; text-align: center; -webkit-text-stroke: 1px #0c0806; paint-order: stroke fill; text-shadow: -1px -1px 0 #0c0806, 1px -1px 0 #0c0806, -1px 1px 0 #0c0806, 1px 1px 0 #0c0806; }
 /* Join page only: the headline reads as a glowing marquee-yellow
    instead of the shared cream color used on the idle/sent walls. */
 .tv-wall--join .tv-headline-tile .tv-headline-text {
