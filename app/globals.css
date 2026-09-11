@@ -3404,6 +3404,16 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
      different red. */
   background: #a52d14;
 }
+/* .centered-page's own box (min-height:100vh, grid place-items:
+   center) doesn't always reach the exact viewport edge on mobile --
+   normally invisible because html/body sit behind it in the site's
+   usual --paper red, the same color .centered-page defaults to. This
+   page overrides that to a different red, which turned the gap into
+   a visible seam/box on the right and bottom edges. Matching html/
+   body's own background whenever this page is showing removes it. */
+html:has(.join-preview-page), body:has(.join-preview-page) {
+  background: #a52d14;
+}
 .join-preview-page::before {
   /* Light film grain over the flat red, same recipe as .intro-grain. */
   content: "";
@@ -3423,47 +3433,119 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
   position: relative;
   z-index: 1;
   width: min(100%, 460px);
+  /* Grid items default to min-width:auto, which lets their content's
+     intrinsic (unwrapped) width push them wider than the track even
+     though width is capped with min(100%, ...) -- .centered-page's
+     grid track is auto-sized (place-items:center doesn't stretch it),
+     so that percentage was being treated as indefinite/auto and this
+     box was sizing to its widest child (the nowrap "Welcome to" line)
+     instead of the real available width. That's what was pushing the
+     whole block (and everything centered inside it) visibly off-center
+     to the right instead of just capping at 460px. min-width: 0
+     overrides the default so the width rule above actually applies. */
+  min-width: 0;
   margin: 0 auto;
   padding: 8px 8px 24px;
   text-align: center;
 }
 .join-welcome-stars {
   margin: 0 0 14px;
-  font-size: 14px;
+  font-size: 22px;
   letter-spacing: .4em;
   color: #0c0806;
 }
 .join-welcome-headline {
   margin: 0 0 22px;
-  font-family: var(--font-tagline), Georgia, serif;
-  font-weight: 800;
   text-transform: uppercase;
   line-height: .96;
   letter-spacing: -.01em;
 }
 .join-welcome-headline-line {
-  display: block;
-  margin: 0 0 2px;
-  font-size: clamp(18px, 4.2vw, 24px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .22em;
+  margin: 0 0 10px;
+  font-weight: 700;
+  /* min-width:0 on .join-welcome (below) fixed an off-center bug caused
+     by this nowrap row's intrinsic width overriding the container's
+     real width -- but that also exposed that 16vw genuinely doesn't
+     fit inside the container at real mobile widths (measured: needs
+     ~390px at a 402px-wide screen, only ~386px is actually available).
+     15vw trims just enough to clear it with a small margin. */
+  /* First correction (15vw) still didn't leave enough room -- it
+     was computed against the page's full width, forgetting that
+     .centered-page ALSO has 24px of padding on each side on top of
+     .join-welcome's own 8px, so the real available width is 64px
+     less than the screen width, not 16px less. Retuned against that
+     corrected budget. */
+  font-size: clamp(44px, 13vw, 90px);
+}
+.join-welcome-headline-text {
+  display: inline-block;
+  white-space: nowrap;
+  font-family: var(--font-tv-wordmark), Arial, sans-serif;
+  letter-spacing: -.02em;
   color: #f0c74e;
-  -webkit-text-stroke: 1.3px #0c0806;
+  -webkit-text-stroke: 2.5px #0c0806;
   paint-order: stroke fill;
-  text-shadow: -1.3px -1.3px 0 #0c0806, 1.3px -1.3px 0 #0c0806, -1.3px 1.3px 0 #0c0806, 1.3px 1.3px 0 #0c0806;
+  text-shadow:
+    0 0 22px rgba(240, 199, 78, .65),
+    0 0 46px rgba(240, 199, 78, .4),
+    -2.5px -2.5px 0 #0c0806, 2.5px -2.5px 0 #0c0806, -2.5px 2.5px 0 #0c0806, 2.5px 2.5px 0 #0c0806;
+}
+.join-welcome-headline-star {
+  flex: none;
+  font-size: .62em;
+  font-family: Arial, sans-serif;
+  color: #f0c74e;
+  -webkit-text-stroke: 1.8px #0c0806;
+  paint-order: stroke fill;
+  text-shadow: -1.8px -1.8px 0 #0c0806, 1.8px -1.8px 0 #0c0806, -1.8px 1.8px 0 #0c0806, 1.8px 1.8px 0 #0c0806;
+}
+.join-welcome-name-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3em;
+  margin: 0 0 -16px;
+  padding: 16px 26px;
+  background: #0c0806;
+  /* Sits above the photo frame's top edge (frame comes after it in
+     the DOM and would otherwise paint over it) so the box visibly
+     overlaps/covers the photo's faded top edge. */
+  position: relative;
+  z-index: 2;
 }
 .join-welcome-headline-name {
   display: block;
-  font-size: clamp(36px, 9.5vw, 60px);
-  color: #f0c74e;
-  -webkit-text-stroke: 2px #0c0806;
-  paint-order: stroke fill;
-  text-shadow: -2px -2px 0 #0c0806, 2px -2px 0 #0c0806, -2px 2px 0 #0c0806, 2px 2px 0 #0c0806;
+  font-family: var(--font-tv-wordmark), Arial, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: clamp(32px, 9.5vw, 50px);
+  letter-spacing: -.01em;
+  /* Flat-filled in the page's own red (no outline/glow) so the type
+     reads as punched straight through the black box into the page
+     underneath, per the reference. */
+  color: #a52d14;
   word-break: break-word;
+}
+.join-welcome-name-star {
+  flex: none;
+  font-size: .55em;
+  font-family: Arial, sans-serif;
+  color: #a52d14;
 }
 .join-welcome-frame {
   position: relative;
-  width: min(100%, 300px);
+  width: min(100%, 420px);
   aspect-ratio: 480 / 504;
-  margin: 0 auto 26px;
+  /* Negative bottom margin pulls the "Hosted by" line (and, since
+     this is normal flow, everything else below it -- chips, the
+     join button, the star row, the footer link) up to overlap the
+     photo's faded bottom edge by the same amount the name box
+     overlaps the top. */
+  margin: 0 auto -16px;
   overflow: hidden;
 }
 .join-welcome-image {
@@ -3471,19 +3553,11 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-.join-welcome-frame::after {
-  /* The actual blend trick: paint the page's own flat color back over
-     the photo's edges via a gradient, fully solid past ~80% out to the
-     corners and fully clear in the middle. This doesn't depend on
-     mask-image support (which wasn't taking effect in practice) --
-     it's just a background-color gradient sitting on top, so the
-     hand-off is exactly the page color, guaranteed, in every browser. */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 58% 60% at 50% 46%, transparent 38%, transparent 62%, #a52d14 88%);
-  pointer-events: none;
+  /* The photo file itself now carries a baked-in alpha fade (a
+     rectangular falloff, ordered-dithered into a halftone dot
+     dissolve at the edges) so the page's flat red-orange shows
+     through the margins with a printed, rasterized edge -- no
+     CSS gradient/mask overlay needed, and no color-matching risk. */
 }
 .join-welcome-host {
   margin: 0 0 20px;
@@ -3494,19 +3568,62 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
 }
 .join-welcome-chips {
   display: flex;
+  align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   margin: 0 0 24px;
 }
 .join-welcome-chip {
-  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Fixed (not min-) width on both boxes -- the seats count and the
+     room code are different lengths, and a min-width let the two
+     boxes grow unevenly, which pushed the star divider off the true
+     center of the row. Equal widths keep the star dead-center. */
+  /* Fixed 176px (plus the star + gaps) no longer fits two boxes on
+     one line now that .join-welcome's real width is enforced (see
+     min-width:0 above) -- this was the "chips stack instead of
+     sitting side by side" bug. A responsive width keeps both boxes
+     on one line with room to spare across real phone widths, while
+     keeping the same min-height so the boxes stay tall/bold. */
+  /* Same correction as the headline above: available width is
+     screen width minus 64px (.centered-page's 24px sides + this
+     box's own 8px sides), not minus 16px -- 36vw left the two boxes
+     + star + gaps too tight to reliably stay on one line. */
+  width: clamp(105px, 30vw, 145px);
+  min-height: 132px;
+  padding: 14px 14px;
   background: #0c0806;
-  color: #f0c74e;
-  font: 800 11px var(--font-tv-wordmark), Arial, sans-serif;
-  letter-spacing: .05em;
+  /* Same punch-through trick as the club-name box: text colored in
+     the page's own red instead of the site's usual gold/cream. */
+  color: #a52d14;
+  font-family: var(--font-tv-wordmark), Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: .03em;
   text-transform: uppercase;
-  white-space: nowrap;
+  line-height: 1.05;
+}
+.join-welcome-chip-count {
+  font-size: clamp(28px, 8vw, 38px);
+}
+.join-welcome-chip-label {
+  font-size: clamp(15px, 4vw, 19px);
+  letter-spacing: .06em;
+}
+.join-welcome-chip-code {
+  font-size: clamp(22px, 6vw, 30px);
+  word-break: break-all;
+}
+.join-welcome-chip-star {
+  flex: none;
+  font-size: 24px;
+  color: #f0c74e;
+  -webkit-text-stroke: 1.4px #0c0806;
+  paint-order: stroke fill;
+  text-shadow: -1.4px -1.4px 0 #0c0806, 1.4px -1.4px 0 #0c0806, -1.4px 1.4px 0 #0c0806, 1.4px 1.4px 0 #0c0806;
 }
 .join-welcome .form-stack { gap: 14px; }
 .join-welcome .action-message {
@@ -3525,12 +3642,12 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
   color: #0c0806;
 }
 .join-welcome-btn {
-  min-height: 54px;
+  min-height: 72px;
   padding: 0 30px;
   border-radius: 0;
   background: #0c0806;
   color: #f0c74e;
-  font: 800 14px var(--font-tv-wordmark), Arial, sans-serif;
+  font: 800 18px var(--font-tv-wordmark), Arial, sans-serif;
   letter-spacing: .08em;
   text-transform: uppercase;
 }
