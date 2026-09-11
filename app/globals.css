@@ -283,6 +283,18 @@ button { color: inherit; }
   0% { transform: scale(0.35); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
+/* Mobile-only header logo lockup (see .home-header-brand in
+   site-header.tsx) -- hidden by default; shown in the max-width:560px
+   block below. */
+.home-header-brand { display: none; }
+/* Mobile-only hero backdrop: a bordered frame (tagline scrolling
+   along all four edges) around a plainly-bordered photo card. Hidden
+   by default; shown in the max-width:560px block below. */
+.hero-frame { display: none; }
+/* Mobile-only body copy laid directly over the bottom color-bar
+   strip. Hidden by default; shown in the max-width:560px block
+   below. */
+.brand-bar-subtext { display: none; }
 .brand-bar-wordmark {
   position: absolute;
   inset: 0;
@@ -1442,6 +1454,322 @@ button { color: inherit; }
   .draft-summary dd, .room-rules dd { max-width: 100%; overflow-wrap: anywhere; text-align: right; }
   .dashboard-tab-bar { overflow-x: auto; overscroll-behavior-inline: contain; }
   .room-code-card, .task-room-code { min-width: 0; }
+  /* Home page mobile layout, take 3. Earlier rounds tried making
+     "Cineclub" a giant hero-level headline (in the bottom strip, then
+     moved up front-and-center) -- didn't land; stepping back to a
+     smaller, more conventional brand touch instead: a compact logo
+     lockup in the header (see .home-header-brand in site-header.tsx,
+     reusing the existing tv-brand-lockup/mark/word treatment from the
+     auth/join TV-wall pages) rather than a headline competing with the
+     actual tagline for attention. The bottom bar is back to a plain
+     color-accent strip with no text.
+
+     The tagline itself still needed its own fix independent of all that:
+     its desktop-only "top:75px" nudge (meant to let it settle in close
+     under the brand bar when there's plenty of vertical room) and the
+     brand bar's old fixed 220px height didn't fit the home page's fixed
+     100vh/overflow:hidden box on a short phone screen -- neutralized the
+     nudge and gave the tagline a real margin-top instead, so it still
+     gets breathing room from the intro line above it. Pulling the whole
+     block up (rather than centering or pinning it to the bottom) puts it
+     in the open space under the header instead of empty space going to
+     waste. */
+  .hero { align-items: start; padding-top: 72px; position: relative; }
+  /* Frame pass: Moni pointed at a reference (a phone-screen mockup)
+     that frames its whole layout with the tagline running as a
+     printed border -- top edge normal, bottom edge flipped 180deg so
+     the loop still reads as one continuous strip around the corners,
+     both side edges vertical -- around a plain, sharply-bordered
+     photo (no blend/blur this time; the previous pass tried melting
+     the photo into the background, this one deliberately doesn't).
+     The border edges use the same seamless-loop trick as the old
+     marquee rows (two identical copies of the phrase, translate by
+     -50% of the pair's own size), just applied along each edge's own
+     axis: translateX for top/bottom, translateY for the sides. The
+     old tagline stays real and accessible as one hidden instance in
+     hero-copy below; the frame text is decorative (aria-hidden). */
+  .hero-frame {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 100vw;
+    transform: translateX(-50%);
+    z-index: 1;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    /* Very subtle TV glitch -- a brief tracking-style jump/brightness
+       flicker, rare and short (well under a quarter-second, once every
+       9s) so it reads as an occasional signal hiccup rather than an
+       effect anyone would notice as "an animation". */
+    animation: hero-frame-glitch 9s ease-in-out infinite;
+  }
+  @keyframes hero-frame-glitch {
+    0%, 96.5%, 100% { transform: translateX(-50%); filter: none; }
+    /* First snap: hard tear -- a jump plus the RGB-split filter, like a
+       dropped tracking line. */
+    96.7% { transform: translate(calc(-50% - 6px), 2px); filter: url(#hero-glitch-rgb) brightness(1.2) contrast(1.1); }
+    96.85% { transform: translateX(-50%); filter: none; }
+    /* Beat of stillness, then a second, smaller snap -- reads as an
+       artifact settling rather than a single clean shake. */
+    97.6% { transform: translateX(-50%); filter: none; }
+    97.75% { transform: translate(calc(-50% + 4px), -1px); filter: url(#hero-glitch-rgb) brightness(0.9); }
+    97.9% { transform: translateX(-50%); filter: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-frame, .hero-glitch-scan { animation: none; }
+  }
+  .hero-glitch-scan {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 15%;
+    z-index: 21;
+    pointer-events: none;
+    opacity: 0;
+    mix-blend-mode: screen;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2' intercept='-0.3'/%3E%3CfeFuncG type='linear' slope='2' intercept='-0.3'/%3E%3CfeFuncB type='linear' slope='2' intercept='-0.3'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E");
+    background-size: 140px 140px;
+    animation: hero-glitch-scan-sweep 9s steps(1) infinite;
+  }
+  @keyframes hero-glitch-scan-sweep {
+    0%, 96.5%, 100% { opacity: 0; top: -15%; }
+    96.7% { opacity: .6; top: 22%; }
+    96.85% { opacity: 0; top: 22%; }
+    97.6% { opacity: 0; top: 61%; }
+    97.75% { opacity: .45; top: 61%; }
+    97.9% { opacity: 0; top: 61%; }
+  }
+  .hero-frame-edge {
+    position: absolute;
+    overflow: hidden;
+    /* Not pure black -- multiply-blended grain (.hero-grain) can't show
+       up over true #000 (anything times zero is zero), so this needs a
+       little headroom for the texture to actually read. */
+    background: #1c1712;
+  }
+  .hero-frame-edge--top, .hero-frame-edge--bottom { left: 0; right: 0; height: 27px; }
+  .hero-frame-edge--top { top: 0; border-bottom: 2px solid #000; }
+  .hero-frame-edge--bottom { bottom: 0; border-top: 2px solid #000; }
+  .hero-frame-edge--left, .hero-frame-edge--right { top: 27px; bottom: 27px; width: 27px; }
+  .hero-frame-edge--left { left: 0; border-right: 2px solid #000; writing-mode: vertical-rl; }
+  .hero-frame-edge--right { right: 0; border-left: 2px solid #000; writing-mode: vertical-lr; }
+  .hero-frame-track {
+    display: flex;
+    width: fit-content;
+    height: 100%;
+    align-items: center;
+    white-space: nowrap;
+    font-family: var(--font-tagline);
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: .08em;
+    color: #d81f26;
+    -webkit-text-stroke: .6px #000;
+    paint-order: stroke fill;
+    text-shadow: -.6px -.6px 0 #000, .6px -.6px 0 #000, -.6px .6px 0 #000, .6px .6px 0 #000;
+  }
+  .hero-frame-track > span { flex-shrink: 0; }
+  .hero-frame-edge--top .hero-frame-track { animation: hero-frame-scroll-x 32s linear infinite; }
+  .hero-frame-edge--bottom .hero-frame-track { animation: hero-frame-scroll-x-flip 32s linear infinite; }
+  .hero-frame-edge--left .hero-frame-track,
+  .hero-frame-edge--right .hero-frame-track { width: 100%; height: fit-content; animation: hero-frame-scroll-y 26s linear infinite; }
+  @keyframes hero-frame-scroll-x {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes hero-frame-scroll-x-flip {
+    from { transform: rotate(180deg) translateX(0); }
+    to { transform: rotate(180deg) translateX(-50%); }
+  }
+  @keyframes hero-frame-scroll-y {
+    from { transform: translateY(0); }
+    to { transform: translateY(-50%); }
+  }
+  .hero-tv-wall {
+    position: absolute;
+    inset: 27px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    background: #1c1712;
+    /* Square corners -- flush against the frame's own rectangular
+       border with zero gap, a rounded corner here just exposed a
+       mismatched notch at the seam instead of blending in. */
+    border-radius: 0;
+    padding: 18px 14px 14px;
+    box-shadow: 0 14px 30px rgba(0,0,0,.55);
+  }
+  .hero-tv-wordmark {
+    flex-shrink: 0;
+    margin: 0 0 14px;
+    text-align: center;
+    font-family: var(--font-tv-wordmark), Arial, sans-serif;
+    font-weight: 700;
+    font-size: clamp(44px, 17.8vw, 88px);
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+    -webkit-text-stroke: 2px #000;
+    paint-order: stroke fill;
+    /* Dark repeating stripes over a solid yellow fill, both clipped to
+       the text -- same segmented/scanline look as the TELEVISION
+       reference's lettering, plus a black stroke around each letter and
+       a plain drop shadow for lift (no bevel/emboss). */
+    background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,.65) 0, rgba(0,0,0,.65) 3px, transparent 3px, transparent 8px),
+      linear-gradient(var(--yellow), var(--yellow));
+    background-blend-mode: multiply;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,.65));
+  }
+  .hero-tv-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 6px;
+  }
+  .tv-cell {
+    position: relative;
+    border-radius: 14px;
+    border: 0.5px solid rgba(255,255,255,.85);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.4);
+  }
+  .tv-cell::before {
+    content: "";
+    position: absolute;
+    inset: -8%;
+    background-image: url("/hero-audience-vertical.png");
+    background-size: 400% 800%;
+    background-repeat: no-repeat;
+    background-position: var(--tv-bg-pos);
+    /* Slight fisheye -- a radial displacement map (see the hidden SVG
+       filter def in page.tsx) bulges the image a touch, like it's
+       behind curved glass rather than perfectly flat. Kept to this
+       inner layer (oversized, then clipped by the card's rounded
+       border) so the crisp white border isn't warped along with it. */
+    filter: url(#tv-fisheye);
+  }
+  .hero-copy { position: relative; z-index: 5; }
+  .hero-copy h1.tagline {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .hero-grain {
+    position: absolute;
+    inset: -2px;
+    z-index: 20;
+    pointer-events: none;
+    opacity: .8;
+    mix-blend-mode: multiply;
+    /* Higher contrast (wider slope/intercept swing) and a smaller tile
+       (denser repeats) than the intro splash's version -- that one only
+       had to read faintly over a light background, this one needs to
+       hold up over a mostly-black frame. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='4'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='1.6' intercept='0.55'/%3E%3CfeFuncG type='linear' slope='1.6' intercept='0.55'/%3E%3CfeFuncB type='linear' slope='1.6' intercept='0.55'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 150px 150px;
+    animation: intro-grain-jitter .1s steps(1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-frame-track, .hero-grain { animation: none; }
+  }
+  .brand-bar { height: 84px; }
+  .brand-bar-wordmark { display: none; }
+  .home-header-brand { display: inline-flex; }
+  /* Full-screen pass: the TV-wall card owns the whole screen, so the
+     header no longer occupies its own 88px flow box -- it's repositioned
+     as an invisible full-viewport wrapper (no box, clicks pass through)
+     with just the menu button floating in the corner on top of
+     everything. The logo lockup stays hidden; the button is restyled as
+     a chunky green remote-control button, "MENU" over a little arrow
+     that flips when the nav is open. */
+  .home-page .site-header {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+    pointer-events: none;
+    z-index: 30;
+  }
+  .home-page .site-header::after { display: none; }
+  .home-page .home-header-brand { display: none; }
+  .home-page .menu-trigger {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    pointer-events: auto;
+    width: 42px;
+    height: 42px;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    background: linear-gradient(160deg, #4ad97a, #1f9e4c);
+    border: 2px solid #0d3a1c;
+    color: #000;
+    font-size: 6.5px;
+    box-shadow: 0 3px 0 #0d3a1c, 0 5px 9px rgba(0,0,0,.55), inset 0 1px 2px rgba(255,255,255,.45);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .home-page .menu-trigger:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #0d3a1c, 0 3px 6px rgba(0,0,0,.5), inset 0 1px 2px rgba(255,255,255,.35);
+  }
+  .home-page .menu-trigger.is-open { color: #000; }
+  .home-page .menu-trigger::after {
+    content: "\25B6";
+    position: static;
+    display: block;
+    width: auto;
+    height: auto;
+    background: none;
+    transform: none;
+    font-size: 9px;
+    line-height: 1;
+    margin-top: 1px;
+  }
+  .brand-bar-subtext {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    margin: 0;
+    padding: 0 22px;
+    text-align: center;
+    font-family: var(--font-hero-subtext), Arial, sans-serif;
+    font-size: clamp(11.5px, 3.4vw, 14px);
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: .01em;
+    text-transform: uppercase;
+    color: #f7ece0;
+    -webkit-text-stroke: .8px #000;
+    paint-order: stroke fill;
+    text-shadow: -.8px -.8px 0 #000, .8px -.8px 0 #000, -.8px .8px 0 #000, .8px .8px 0 #000;
+  }
 }
 
 @media (max-width: 380px) {

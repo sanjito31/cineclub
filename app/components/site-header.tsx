@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { BrandMark } from "@/app/components/brand-mark";
 
 type NavLink = {
   key: string;
@@ -186,6 +187,16 @@ export function SiteHeader() {
 
   return (
     <header className="site-header">
+      {/* Mobile-only small logo lockup, left side of the header -- a
+          proper (small, confident) brand presence up top instead of a
+          giant wordmark competing with the hero copy for attention.
+          Hidden on desktop, which keeps its identity from the big
+          bottom-bar wordmark. Decorative: the real site name is in the
+          page title/nav, not this mark. */}
+      <span className="home-header-brand tv-brand-lockup" aria-hidden="true">
+        <span className="tv-brand-mark-wrap"><BrandMark width={30} height={32} /></span>
+        <span className="tv-brand-word">Cineclub</span>
+      </span>
       <button
         type="button"
         className={`menu-trigger${open ? " is-open" : ""}`}
