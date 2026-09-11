@@ -145,7 +145,11 @@ export function MovieReveal({
       <section className="panel reveal-stage" aria-labelledby="reveal-heading">
         <div className="selection-intro">
           <div>
-            <span className="eyebrow">{completed ? "The lineup" : "The reveal"}</span>
+            <span className="eyebrow eyebrow-marquee">
+              <span className="tv-bulb" aria-hidden="true" /><span className="tv-bulb" aria-hidden="true" /><span className="tv-bulb" aria-hidden="true" />
+              {completed ? "The lineup" : "The reveal"}
+              <span className="tv-bulb" aria-hidden="true" /><span className="tv-bulb" aria-hidden="true" /><span className="tv-bulb" aria-hidden="true" />
+            </span>
             <h2 id="reveal-heading">
               {completed
                 ? "Every finalist is on the table"

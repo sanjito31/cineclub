@@ -25,8 +25,8 @@ export default async function RoomRevealPage({
   const reveal = toRevealClientContext(await getRevealContext(room.code, user.id));
 
   return (
-    <main className="task-page">
-      <RoomTaskHeader />
+    <main className="task-page reveal-page">
+      <RoomTaskHeader code={reveal.code} />
       <RoomTaskIdentity name={reveal.name} code={reveal.code} />
       <div className="task-main">
         <MovieReveal initial={reveal} revealAction={revealNextMovieAction} skipRevealAction={skipRevealAction} />

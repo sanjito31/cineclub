@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 
 /**
  * Standard "back to the previous step" row for lightweight pages, with an
  * optional Profile/Clubs/Sign out cluster on the right for pages reached
- * while already signed in.
+ * while already signed in. The back button and menu button are the same
+ * fixed, site-wide pair used everywhere else.
  */
 export function PageNav({
   backHref,
@@ -18,17 +21,20 @@ export function PageNav({
   wide?: boolean;
 }) {
   return (
-    <div className={`page-nav-row${wide ? " page-nav-row--wide" : ""}`}>
-      <Link className="back-link" href={backHref}>← Back</Link>
+    <>
+      <BackButton href={backHref} />
+      <GlobalMenu />
       {showAccountNav ? (
-        <nav className="dashboard-nav" aria-label="Navigation">
-          <Link href="/profile">Profile</Link>
-          <Link href="/dashboard">Clubs</Link>
-          <form action={signOut}>
-            <button className="text-button" type="submit">Sign out</button>
-          </form>
-        </nav>
+        <div className={`page-nav-row${wide ? " page-nav-row--wide" : ""}`}>
+          <nav className="dashboard-nav" aria-label="Navigation">
+            <Link href="/profile">Profile</Link>
+            <Link href="/dashboard">Clubs</Link>
+            <form action={signOut}>
+              <button className="text-button" type="submit">Sign out</button>
+            </form>
+          </nav>
+        </div>
       ) : null}
-    </div>
+    </>
   );
 }

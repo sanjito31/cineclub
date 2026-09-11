@@ -350,14 +350,7 @@ export function MovieVoting({
       <div className="selection-intro">
         <span className="title-card-tag title-card-tag-left">Official ballot</span>
         <div>
-          <svg className="voting-ballot-icon" viewBox="0 0 64 48" fill="none" aria-hidden="true">
-            <rect x="4" y="30" width="14" height="12" rx="3" />
-            <rect x="14" y="18" width="22" height="22" rx="10" />
-            <rect x="19" y="10" width="5" height="11" rx="2.5" />
-            <rect x="26" y="9" width="5" height="12" rx="2.5" />
-            <rect x="33" y="10" width="5" height="11" rx="2.5" />
-            <rect x="36" y="19" width="26" height="10" rx="5" />
-          </svg>
+          <span className="voting-ballot-icon" aria-hidden="true" />
           <span className="eyebrow">Ranked voting</span>
           <h2 id="voting-heading">
             {requireParticipantCoverage ? "Cover every person, then rank" : "Rank the movies"}

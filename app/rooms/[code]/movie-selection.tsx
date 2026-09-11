@@ -37,6 +37,8 @@ type OverlapState = {
 };
 type ParsedWatchboxdContext = NonNullable<ReturnType<typeof parseWatchboxdContextResponse>>;
 
+const PROGRESS_BAR_COLORS = ["#a59723", "#3d8b9c", "#317133", "#8a5389", "#8f1820", "#a8a49c", "#202657"];
+
 const createSearchState = (): SearchState => ({
   query: "", submittedQuery: "", results: [], status: "idle", page: 1, totalPages: 0,
 });
@@ -131,7 +133,9 @@ function MovieDetails({ movie, sameUserDuplicate = false }: {
 }
 
 function SelectedCheck({ title }: { title: string }) {
-  return <span className="movie-choice-check" aria-label={`${title} selected`} title="Selected"><span aria-hidden="true">✓</span></span>;
+  return <span className="movie-choice-check" aria-label={`${title} selected`} title="Selected">
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l5 5L19 7" /></svg>
+  </span>;
 }
 
 function optionalNumber(value: string) {
@@ -141,11 +145,11 @@ function optionalNumber(value: string) {
 }
 
 export function MovieSelection({
-  code, selectionsPerUser, searchEndpoint, watchboxdEndpoint, ratingsEndpoint,
+  code, roomName, selectionsPerUser, searchEndpoint, watchboxdEndpoint, ratingsEndpoint,
   letterboxdMoviesEndpoint, submitSelectionsAction, initialSelections = [],
   hasSubmittedSelections = false,
 }: {
-  code: string; selectionsPerUser: number; searchEndpoint: string; watchboxdEndpoint: string;
+  code: string; roomName: string; selectionsPerUser: number; searchEndpoint: string; watchboxdEndpoint: string;
   ratingsEndpoint: string; letterboxdMoviesEndpoint: string;
   submitSelectionsAction: SubmitSelectionsAction; initialSelections?: SelectionSlotValue[];
   initialSuggestions?: SelectionMovie[];
@@ -468,7 +472,10 @@ export function MovieSelection({
       return openIndex < 0 ? current : current.map((slot, index) => index === openIndex
         ? { ...slot, movie: applyWatchedIndexToMovie(movie, watchedRef.current) } : slot);
     });
-    if (closeSearch) setSearchOpen(false);
+    if (closeSearch) {
+      setSearchOpen(false);
+      setSearch(createSearchState());
+    }
   }
   function removeMovie(slotIndex: number) {
     setSlots((current) => current.map((slot) => slot.slotIndex === slotIndex ? { ...slot, movie: null } : slot));
@@ -500,26 +507,47 @@ export function MovieSelection({
 
   return (
     <section className="panel selection-panel nomination-panel" aria-labelledby="selection-heading">
-      <div className="nomination-marquee" aria-hidden="true">
-        <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
-        <span className="nomination-marquee-label">✷ Box Office Open ✷</span>
-        <span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" /><span className="tv-bulb" />
-      </div>
-      <div className="selection-intro">
-        <div className="selection-intro-copy"><span className="eyebrow">Your movie picks</span><h2 id="selection-heading">Choose your movies</h2>
-          <p>Search the full movie catalog or browse your group’s shared watchlist picks. Choose {selectionsPerUser} different movies, review them below, then lock them in. Warnings give you context before you decide.</p>
-          {completedSlots > 0 ? <ol className="selection-intro-picks" aria-label="Current movie choices">
-            {slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }) => <li key={slot.slotIndex}>
-              <span className="selection-intro-pick-index">{slot.slotIndex}</span>
-              <strong>{movie.title}</strong>
-              {movie.releaseYear ? <span className="selection-intro-pick-year">{movie.releaseYear}</span> : null}
-              <RatingMarks letterboxdRating={movie.letterboxdRating} />
-            </li>)}
-          </ol> : null}
+      <div className="poster-hero">
+        <div className="poster-hero-scan" aria-hidden="true" />
+        <div className="poster-hero-tagrow">
+          <span className="poster-stripe-tag" aria-hidden="true">
+            <span /><span /><span /><span /><span />
+          </span>
+          <div className="poster-club-badge">
+            <span className="poster-club-badge-ribbon">{roomName}</span>
+            <span className="poster-club-badge-sub">Video Club</span>
+          </div>
         </div>
-        <div className={`selection-count${allSlotsFilled ? " is-complete" : ""}`} aria-live="polite">
-          <strong>{completedSlots}/{selectionsPerUser}</strong><span>{allSlotsFilled ? "Ready to submit" : "choices filled"}</span>
+
+        <div className="poster-progress" role="progressbar" aria-valuenow={completedSlots} aria-valuemin={0} aria-valuemax={selectionsPerUser} aria-label="Selections progress">
+          {Array.from({ length: selectionsPerUser }).map((_, i) => (
+            <span
+              key={i}
+              className={`poster-progress-bar${i < completedSlots ? " is-filled" : ""}`}
+              style={{ "--bar-color": PROGRESS_BAR_COLORS[i % PROGRESS_BAR_COLORS.length] } as React.CSSProperties}
+            />
+          ))}
         </div>
+
+        <h2 id="selection-heading" className="poster-headline">
+          Choose<br />your movies
+        </h2>
+        <p className="poster-subhead">
+          We&rsquo;ve been there and now we have a <strong>solution</strong>: search the full catalog or browse your group&rsquo;s watchlist, pick {selectionsPerUser}, then lock them in.
+        </p>
+
+        <div className="poster-photo-grid" aria-hidden="true">
+          <span className="poster-photo poster-photo-a" />
+          <span className="poster-photo poster-photo-b" />
+          <span className="poster-photo poster-photo-c" />
+          <span className="poster-photo poster-photo-d" />
+          <span className="poster-photo poster-photo-e" />
+        </div>
+
+        <div className="poster-hero-bio">
+          <p>Every pick comes with ratings and warnings before you commit &mdash; no blind rentals, no regrets. You&rsquo;re not alone in the queue: the whole club decides together.</p>
+        </div>
+
       </div>
 
       <form action={formAction} className="selection-form" onSubmit={(event) => {
@@ -528,42 +556,6 @@ export function MovieSelection({
       }}>
         <input name="code" type="hidden" value={code} />
         <input name="selections" type="hidden" value={serializeSelectionSubmission(slots)} />
-
-        <div ref={searchSectionRef} className="selection-search-section" role="search" aria-labelledby="selection-search-heading">
-          <div className="selection-section-heading"><div><span className="eyebrow">Search movies</span><h3 id="selection-search-heading">Find a specific movie</h3></div>
-            <span>{allSlotsFilled ? "All choices filled" : `${selectionsPerUser - completedSlots} remaining`}</span></div>
-          <label className="sr-only" htmlFor="unified-movie-search">Search movies</label>
-          <div className="movie-search-controls">
-            <input id="unified-movie-search" value={search.query} onChange={(event) => updateQuery(event.target.value)}
-              onFocus={() => setSearchOpen(true)} onKeyDown={(event) => {
-                if (event.key === "Enter") { event.preventDefault(); void searchMovies(); }
-                else if (event.key === "Escape") { setSearchOpen(false); event.currentTarget.blur(); }
-              }} placeholder="Search by movie title" autoComplete="off" role="combobox" aria-autocomplete="list" aria-controls="movie-search-tray" aria-expanded={searchOpen} />
-            <button className="button button-secondary button-compact" disabled={search.status === "loading"} type="button" onClick={() => void searchMovies()}>
-              {search.status === "loading" ? "Searching…" : "Search"}
-            </button>
-          </div>
-          {searchOpen && (search.status !== "idle" || search.results.length > 0) ? (
-            <div id="movie-search-tray" className="movie-search-tray">
-              <div className={`movie-search-status is-${search.status}`} role={search.status === "error" ? "alert" : "status"} aria-live="polite">
-                {search.status === "loading" ? <><span className="status-spinner" aria-hidden="true" /> Searching movies…</> : search.message ?? ""}
-              </div>
-              {search.results.length > 0 && search.status !== "error" ? <>
-                <ul className="movie-result-list" aria-label="Movie search results">{search.results.map((movie) => {
-                  const selected = isSelected(movie.tmdbId);
-                  return <li key={movie.tmdbId}><LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} /></LetterboxdMovieLink>
-                    {selected ? <SelectedCheck title={movie.title} /> : <button className="button button-secondary button-compact" type="button" onClick={() => chooseMovie(movie, true)} disabled={allSlotsFilled}>Choose</button>}
-                  </li>;
-                })}</ul>
-                {search.totalPages > 1 ? <div className="movie-search-pagination">
-                  <button className="button button-secondary button-compact" type="button" disabled={search.page <= 1 || search.status === "loading"} onClick={() => void searchMovies(search.page - 1)}>Previous</button>
-                  <span>Page {search.page} of {search.totalPages}</span>
-                  <button className="button button-secondary button-compact" type="button" disabled={search.page >= search.totalPages || search.status === "loading"} onClick={() => void searchMovies(search.page + 1)}>Next</button>
-                </div> : null}
-              </> : null}
-            </div>
-          ) : null}
-        </div>
 
         {overlap.status === "idle" || overlap.eligible || overlapError ? <section className="overlap-suggestions overlap-suggestions-panel" aria-labelledby="overlap-heading">
           <div className="selection-section-heading overlap-heading"><div><span className="eyebrow">From your group</span><h3 id="overlap-heading">Watchlist overlap suggestions</h3>
@@ -656,7 +648,7 @@ export function MovieSelection({
         </section> : null}
 
         <section className="selected-selections" aria-labelledby="selected-selections-heading">
-          <div className="selection-section-heading"><div><span className="eyebrow">Your lineup</span><h3 id="selected-selections-heading">Selected movies</h3></div><span>{completedSlots}/{selectionsPerUser}</span></div>
+          <div className="selection-section-heading"><div><span id="selected-selections-heading" className="eyebrow">Find your movie</span></div><span>{allSlotsFilled ? "All choices filled" : `${selectionsPerUser - completedSlots} remaining`}</span></div>
           {completedSlots === 0 ? <div className="selected-selections-empty">Your choices will appear here as you add them.</div>
             : <ol className="selected-selections-grid">{slots.flatMap((slot) => slot.movie ? [{ slot, movie: slot.movie }] : []).map(({ slot, movie }, ticketIndex) => {
               const serial = String((movie.tmdbId * 48271) % 900000 + 100000);
@@ -667,20 +659,68 @@ export function MovieSelection({
                     <div className="selection-ticket-head">★★★ CINECLUB ★★★</div>
                     <LetterboxdMovieLink movie={movie}><span className="selection-ticket-title">{movie.title}</span></LetterboxdMovieLink>
                     {movie.releaseYear ? <span className="selection-ticket-year">{movie.releaseYear}</span> : null}
+                    <span className="selection-ticket-club">★ {roomName} ★</span>
                   </div>
                   <span className="selection-ticket-serial selection-ticket-serial-right" aria-hidden="true">{serial}</span>
                 </div>
-                <button className="text-button selection-ticket-remove" type="button" onClick={() => removeMovie(slot.slotIndex)}>Remove movie</button>
+                <button className="text-button selection-ticket-remove" type="button" onClick={() => removeMovie(slot.slotIndex)}>
+                  <span className="sr-only">Remove movie</span>
+                  <span aria-hidden="true">−</span>
+                </button>
               </li>;
             })}</ol>}
-        </section>
 
-        <div className="selection-submit">
-          {!allSlotsFilled ? <p className="selection-submit-hint">Choose {selectionsPerUser - completedSlots} more {selectionsPerUser - completedSlots === 1 ? "movie" : "movies"} to continue.</p>
-            : duplicates.size > 0 ? <p className="selection-submit-hint is-error">Remove duplicate movies before submitting.</p> : null}
-          <ActionMessage status={state.status} message={state.message} />
-          <button className="button button-primary" disabled={!submissionReady || pending} type="submit">{pending ? "Saving selections…" : hasSubmittedSelections || state.status === "success" ? "Update selections" : "Submit selections"}</button>
+        <div ref={searchSectionRef} className="selection-search-section" {...(allSlotsFilled ? {} : { role: "search", "aria-label": "Search movies" })}>
+          {allSlotsFilled ? (
+            <div className="selection-submit">
+              {duplicates.size > 0 ? <p className="selection-submit-hint is-error">Remove duplicate movies before submitting.</p> : null}
+              <ActionMessage status={state.status} message={state.message} />
+              <button className="button button-primary selection-submit-button" disabled={!submissionReady || pending} type="submit">{pending ? "Saving selections…" : hasSubmittedSelections || state.status === "success" ? "Update selections" : "Submit selections"}</button>
+            </div>
+          ) : (
+            <>
+          <label className="sr-only" htmlFor="unified-movie-search">Search movies</label>
+          <div className="movie-search-controls">
+            <div className="movie-search-input-wrap">
+              <span className="movie-search-filmtext movie-search-filmtext-top-left" aria-hidden="true">18A</span>
+              <span className="movie-search-filmtext movie-search-filmtext-top-right" aria-hidden="true">S-200</span>
+              <input id="unified-movie-search" value={search.query} onChange={(event) => updateQuery(event.target.value)}
+                onFocus={() => setSearchOpen(true)} onKeyDown={(event) => {
+                  if (event.key === "Enter") { event.preventDefault(); void searchMovies(); }
+                  else if (event.key === "Escape") { setSearchOpen(false); event.currentTarget.blur(); }
+                }} placeholder="Search by movie title" autoComplete="off" role="combobox" aria-autocomplete="list" aria-controls="movie-search-tray" aria-expanded={searchOpen} />
+              <span className="movie-search-fake-caret" aria-hidden="true">I</span>
+              <span className="movie-search-filmtext movie-search-filmtext-bottom-left" aria-hidden="true">19</span>
+              <span className="movie-search-filmtext movie-search-filmtext-bottom-right" aria-hidden="true">F85</span>
+              <button className="button button-secondary button-compact movie-search-submit" disabled={search.status === "loading"} type="button" onClick={() => void searchMovies()}>
+                Go
+              </button>
+            </div>
+          </div>
+          {searchOpen && (search.status !== "idle" || search.results.length > 0) ? (
+            <div id="movie-search-tray" className="movie-search-tray">
+              <div className={`movie-search-status is-${search.status}`} role={search.status === "error" ? "alert" : "status"} aria-live="polite">
+                {search.status === "loading" ? <><span className="status-spinner" aria-hidden="true" /> Searching movies…</> : search.message ?? ""}
+              </div>
+              {search.results.length > 0 && search.status !== "error" ? <>
+                <ul className="movie-result-list" aria-label="Movie search results">{search.results.map((movie) => {
+                  const selected = isSelected(movie.tmdbId);
+                  return <li key={movie.tmdbId}><LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} /></LetterboxdMovieLink>
+                    {selected ? <SelectedCheck title={movie.title} /> : <button className="button button-secondary button-compact" type="button" onClick={() => chooseMovie(movie, true)} disabled={allSlotsFilled}>Choose</button>}
+                  </li>;
+                })}</ul>
+                {search.totalPages > 1 ? <div className="movie-search-pagination">
+                  <button className="button button-secondary button-compact" type="button" disabled={search.page <= 1 || search.status === "loading"} onClick={() => void searchMovies(search.page - 1)}>Previous</button>
+                  <span>Page {search.page} of {search.totalPages}</span>
+                  <button className="button button-secondary button-compact" type="button" disabled={search.page >= search.totalPages || search.status === "loading"} onClick={() => void searchMovies(search.page + 1)}>Next</button>
+                </div> : null}
+              </> : null}
+            </div>
+          ) : null}
+            </>
+          )}
         </div>
+        </section>
       </form>
     </section>
   );

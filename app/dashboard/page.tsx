@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { getDashboardRooms } from "@/lib/data/rooms";
@@ -85,8 +87,9 @@ export default async function DashboardPage() {
 
   return (
     <main className="dashboard-page">
+      <BackButton href="/" />
+      <GlobalMenu />
       <header className="dashboard-header">
-        <Link className="back-link" href="/">← Back</Link>
         <nav className="dashboard-nav" aria-label="Dashboard navigation">
           <Link href="/profile">Profile</Link>
           <Link href="/dashboard">Clubs</Link>

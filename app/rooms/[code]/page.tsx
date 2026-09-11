@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions/auth";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 import {
   deleteRoomAction,
   lockRoomRosterAction,
@@ -57,8 +59,9 @@ export default async function RoomPage({
   return (
     <main className="lobby-page">
       {query.created === "1" ? <ClearRoomDraft /> : null}
+      <BackButton href="/dashboard" />
+      <GlobalMenu />
       <header className="lobby-header">
-        <Link className="back-link" href="/dashboard">← Back</Link>
         <nav className="dashboard-nav" aria-label="Navigation">
           <Link href="/profile">Profile</Link>
           <Link href="/dashboard">Clubs</Link>

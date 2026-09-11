@@ -85,7 +85,7 @@ export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }
           <fieldset className="form-station">
             <legend className="visually-hidden">Basics</legend>
             <div className="station-head">
-              <svg className="station-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <span className="station-arrow" aria-hidden="true" />
               <span className="station-num">1</span>
               <h2>Basics</h2>
             </div>
@@ -138,7 +138,7 @@ export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }
           <fieldset className="form-station">
             <legend className="visually-hidden">Rules</legend>
             <div className="station-head">
-              <svg className="station-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <span className="station-arrow" aria-hidden="true" />
               <span className="station-num">2</span>
               <h2>Rules</h2>
             </div>
@@ -181,7 +181,7 @@ export function CreateRoomForm({ isAuthenticated }: { isAuthenticated: boolean }
           <fieldset className="form-station">
             <legend className="visually-hidden">Deadlines</legend>
             <div className="station-head">
-              <svg className="station-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <span className="station-arrow" aria-hidden="true" />
               <span className="station-num">3</span>
               <h2>Deadlines</h2>
             </div>

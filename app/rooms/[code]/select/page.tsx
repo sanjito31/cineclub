@@ -3,10 +3,12 @@ import { submitNominationsAction } from "@/app/actions/nominations";
 import { loadMemberRoom } from "@/app/rooms/[code]/load-room";
 import { MovieSelection } from "@/app/rooms/[code]/movie-selection";
 import { RoomTaskHeader, RoomTaskIdentity } from "@/app/rooms/[code]/room-task-header";
+import { GlobalMenu } from "@/app/components/global-menu";
+import { BackButton } from "@/app/components/back-button";
 import { toSelectionMovie } from "@/app/rooms/[code]/selection-contracts";
 import { RoomPhase } from "@/app/generated/prisma/enums";
 import { getSubmittedNominations } from "@/lib/data/nominations";
-import { roomTaskPath } from "@/lib/domain/room-paths";
+import { roomHomePath, roomTaskPath } from "@/lib/domain/room-paths";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +46,15 @@ export default async function RoomSelectionPage({
   }));
 
   return (
-    <main className="task-page">
-      <RoomTaskHeader />
+    <main className="task-page selection-page">
+      <RoomTaskHeader code={room.code} />
+      <BackButton href={roomHomePath(room.code)} />
+      <GlobalMenu />
       <RoomTaskIdentity name={room.name} code={room.code} />
       <div className="task-main">
         <MovieSelection
           code={room.code}
+          roomName={room.name}
           selectionsPerUser={room.selectionsPerUser}
           searchEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/search`}
           watchboxdEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/watchboxd`}

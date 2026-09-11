@@ -75,7 +75,7 @@ export default async function RoomVotingPage({
 
   return (
     <main className="task-page">
-      <RoomTaskHeader />
+      <RoomTaskHeader code={voting.code} />
       <RoomTaskIdentity name={voting.name} code={voting.code} variant="ballot" />
       <div className="task-main">
         {voting.alreadySubmitted ? (

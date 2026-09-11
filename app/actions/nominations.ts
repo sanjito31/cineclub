@@ -95,7 +95,7 @@ export async function submitNominationsAction(
         ? "Selections submitted. Voting is now open."
         : result.resubmitted
           ? "Selections updated. You can update them again until voting begins."
-          : "Selections submitted. Waiting for the remaining participants.",
+          : "And now the wait begins...waiting for the other participants to submit",
       result: {
         roomId: result.roomId,
         code: result.code,
