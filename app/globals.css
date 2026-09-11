@@ -3364,16 +3364,28 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
   /* Join drops its two smaller photo tiles (juggler, hatstack) to keep
      things legible at phone width; the tiles that remain in each photo
      row still size themselves to their own aspect ratio. */
-  .tv-wall--join { grid-template-rows: minmax(0,.8fr) minmax(0,1.3fr) minmax(0,1.3fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr); }
+  .tv-wall--join { grid-template-rows: minmax(0,.65fr) minmax(0,1.45fr) minmax(0,1.45fr) minmax(0,.65fr) minmax(0,1fr) minmax(0,1fr); }
   .tv-wall--join .tv-e4, .tv-wall--join .tv-e3b, .tv-wall--join .tv-photo-row--extra, .tv-wall--join .tv-e9 { display: none; }
   .tv-wall--join .tv-e1, .tv-wall--join .tv-e3 { transform: none; }
-  .tv-wall--join .tv-headline-tile .tv-screen { flex-direction: column; align-items: center; justify-content: flex-start; gap: 0; padding: 14px 20px 8px; }
+  .tv-wall--join .tv-headline-tile .tv-screen { flex-direction: column; align-items: center; justify-content: flex-start; gap: 0; padding: 8px 20px 6px; }
   .tv-headline-copy { align-items: center; }
   .tv-wall--join .tv-headline-tile .tv-headline-text,
   .tv-wall--join .tv-headline-tile .tv-headline-lede { text-align: center; max-width: none; }
   .tv-wall--join .tv-headline-tile .tv-ident-strip,
   .tv-wall--join .tv-headline-tile .tv-dot-strip { margin-left: auto; margin-right: auto; }
-  .tv-wall--join .tv-headline-tile .tv-code-entry { margin-top: 10px; max-width: 300px; }
+  .tv-wall--join .tv-headline-tile .tv-code-entry { margin-top: 5px; max-width: 300px; }
+  /* Mobile headline-tile content (2-line title + lede + color/dot
+     strips + code input) needed more height than its fr-sized row
+     provided, so the code input's rounded bottom edge got sliced
+     off by .tv-tile's overflow:hidden. Tightened spacing here, plus
+     the row-share bump above and the two photo-tile padding trims
+     below, closes that gap without changing the visual design. */
+  .tv-wall--join .tv-headline-tile .tv-headline-text { line-height: 1; }
+  .tv-wall--join .tv-headline-tile .tv-headline-lede { margin-top: 2px; line-height: 1.3; }
+  .tv-wall--join .tv-headline-tile .tv-input-label { margin-bottom: 4px; }
+  .tv-wall--join .tv-headline-tile .tv-ident-strip { margin-top: 5px; }
+  .tv-wall--join .tv-headline-tile .tv-dot-strip { margin-top: 3px; }
+  .tv-wall--join .tv-e1, .tv-wall--join .tv-e3 { padding: 9px 9px 7px; }
   .tv-wall--join .tv-photo-row--top { grid-column: 1 / 3; grid-row: 1; }
   .tv-wall--join .tv-headline-tile { grid-column: 1 / 3; grid-row: 2 / 4; }
   .tv-wall--join .tv-photo-row--mid { grid-column: 1 / 3; grid-row: 4; }
