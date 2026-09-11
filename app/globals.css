@@ -2378,16 +2378,43 @@ button { color: inherit; }
        flicker, rare and short (well under a quarter-second, once every
        9s) so it reads as an occasional signal hiccup rather than an
        effect anyone would notice as "an animation". */
+    /* Base animation is the plain position-snap version (no SVG
+       filter) -- safe everywhere, iOS included. Non-iOS browsers get
+       upgraded to the RGB-split version below, since only iOS WebKit
+       has the feImage/background-image rendering bug documented next
+       to .tv-cell::before above. */
     animation: hero-frame-glitch 9s ease-in-out infinite;
   }
   @keyframes hero-frame-glitch {
-    0%, 96.5%, 100% { transform: translateX(-50%); filter: none; }
-    /* First snap: hard tear -- a jump plus the RGB-split filter, like a
-       dropped tracking line. */
-    96.7% { transform: translate(calc(-50% - 6px), 2px); filter: url(#hero-glitch-rgb) brightness(1.2) contrast(1.1); }
-    96.85% { transform: translateX(-50%); filter: none; }
+    0%, 96.5%, 100% { transform: translateX(-50%); }
+    /* First snap: hard tear -- just the positional jump on iOS (see
+       hero-frame-glitch-rgb for the enhanced version with the
+       RGB-split filter). */
+    96.7% { transform: translate(calc(-50% - 6px), 2px); }
+    96.85% { transform: translateX(-50%); }
     /* Beat of stillness, then a second, smaller snap -- reads as an
        artifact settling rather than a single clean shake. */
+    97.6% { transform: translateX(-50%); }
+    97.75% { transform: translate(calc(-50% + 4px), -1px); }
+    97.9% { transform: translateX(-50%); }
+  }
+  /* Enhanced version: same transform snaps, plus the RGB-split
+     filter -- like a dropped tracking line. Kept off iOS: applying an
+     SVG filter (even one without feImage, like this one) to .hero-frame
+     risks the same class of WebKit rendering bug that broke the
+     .tv-cell background photos, since .hero-frame contains the
+     background-image tiles as descendants. Not confirmed to actually
+     blank anything out, but there's no upside to risking it for a
+     once-every-9-seconds flourish. */
+  @supports not (-webkit-touch-callout: none) {
+    .hero-frame {
+      animation-name: hero-frame-glitch-rgb;
+    }
+  }
+  @keyframes hero-frame-glitch-rgb {
+    0%, 96.5%, 100% { transform: translateX(-50%); filter: none; }
+    96.7% { transform: translate(calc(-50% - 6px), 2px); filter: url(#hero-glitch-rgb) brightness(1.2) contrast(1.1); }
+    96.85% { transform: translateX(-50%); filter: none; }
     97.6% { transform: translateX(-50%); filter: none; }
     97.75% { transform: translate(calc(-50% + 4px), -1px); filter: url(#hero-glitch-rgb) brightness(0.9); }
     97.9% { transform: translateX(-50%); filter: none; }
@@ -2540,12 +2567,22 @@ button { color: inherit; }
     background-size: 400% 800%;
     background-repeat: no-repeat;
     background-position: var(--tv-bg-pos);
-    /* Slight fisheye -- a radial displacement map (see the hidden SVG
-       filter def in page.tsx) bulges the image a touch, like it's
-       behind curved glass rather than perfectly flat. Kept to this
-       inner layer (oversized, then clipped by the card's rounded
-       border) so the crisp white border isn't warped along with it. */
-    filter: url(#tv-fisheye);
+  }
+  /* Slight fisheye -- a radial displacement map (see the hidden SVG
+     filter def in page.tsx) bulges the image a touch, like it's
+     behind curved glass rather than perfectly flat. Kept off iOS: every
+     iOS browser (Safari and Chrome/Firefox-on-iOS alike, all WebKit
+     under the hood) has a long-standing bug where an SVG filter with
+     feImage/feDisplacementMap applied to an element that also has a
+     background-image makes the background disappear entirely -- so
+     the whole photo mosaic was rendering blank on phones. The
+     `-webkit-touch-callout` feature query is iOS-only, so this scopes
+     the (purely decorative) distortion out there while keeping it
+     everywhere else. */
+  @supports not (-webkit-touch-callout: none) {
+    .tv-cell::before {
+      filter: url(#tv-fisheye);
+    }
   }
   .hero-copy { position: relative; z-index: 5; }
   .hero-copy h1.tagline {
