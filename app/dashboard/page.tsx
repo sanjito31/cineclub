@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { getDashboardRooms } from "@/lib/data/rooms";
 import { roomPhaseLabels } from "@/lib/domain/room-lifecycle";
 import { roomHomePath } from "@/lib/domain/room-paths";
 import { DashboardTabs } from "./dashboard-tabs";
+import { RevealOnScroll } from "@/app/components/reveal-on-scroll";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +46,7 @@ function RoomCard({ room, hosting = false }: { room: DashboardRoom; hosting?: bo
         <span>{room._count.participants} of {room.maxParticipants} members</span>
         <span>Updated {formatUpdatedAt(room.updatedAt)}</span>
       </span>
-      <span className="dashboard-room-open">Open room <span aria-hidden="true">→</span></span>
+      <span className="dashboard-room-open">Open club <span aria-hidden="true">→</span></span>
     </Link>
   );
 }
@@ -62,8 +65,10 @@ function RoomGrid({
   }
   return (
     <div className="dashboard-room-grid">
-      {rooms.map((room) => (
-        <RoomCard key={room.id} room={room} hosting={room.ownerId === userId} />
+      {rooms.map((room, index) => (
+        <RevealOnScroll key={room.id} index={index}>
+          <RoomCard room={room} hosting={room.ownerId === userId} />
+        </RevealOnScroll>
       ))}
     </div>
   );
@@ -82,14 +87,12 @@ export default async function DashboardPage() {
 
   return (
     <main className="dashboard-page">
+      <BackButton href="/" />
+      <GlobalMenu />
       <header className="dashboard-header">
-        <Link className="brand" href="/dashboard" aria-label="Cineclub dashboard">
-          <span className="brand-mark" aria-hidden="true">C</span>
-          <span>Cineclub</span>
-        </Link>
         <nav className="dashboard-nav" aria-label="Dashboard navigation">
           <Link href="/profile">Profile</Link>
-          <Link href="/dashboard">Rooms</Link>
+          <Link href="/dashboard">Clubs</Link>
           <form action={signOut}>
             <button className="text-button" type="submit">Sign out</button>
           </form>
@@ -104,7 +107,7 @@ export default async function DashboardPage() {
             <p>Pick up where your group left off, or start something new.</p>
           </div>
           <div className="dashboard-actions">
-            <Link className="button button-primary" href="/create">Create a room</Link>
+            <Link className="button button-primary" href="/create">Create a club</Link>
             <Link className="button button-secondary" href="/join">Join with a code</Link>
           </div>
         </section>
@@ -116,14 +119,14 @@ export default async function DashboardPage() {
             <RoomGrid
               rooms={rooms.active}
               userId={rooms.userId}
-              emptyMessage="No active rooms yet — create one or join with a code."
+              emptyMessage="No active clubs yet — create one or join with a code."
             />
           }
           completedContent={
             <RoomGrid
               rooms={rooms.completed}
               userId={rooms.userId}
-              emptyMessage="Completed rooms will collect here."
+              emptyMessage="Completed clubs will collect here."
             />
           }
         />

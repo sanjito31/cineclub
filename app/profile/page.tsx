@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ProfileForm } from "@/app/onboarding/profile-form";
 import { signOut } from "@/app/actions/auth";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 
@@ -12,11 +14,12 @@ export default async function ProfilePage() {
 
   return (
     <main className="centered-page">
+      <BackButton href="/dashboard" />
+      <GlobalMenu />
       <header className="lobby-header">
-        <Link className="brand" href="/dashboard"><span className="brand-mark">C</span><span>Cineclub</span></Link>
         <nav className="dashboard-nav" aria-label="Navigation">
           <Link href="/profile">Profile</Link>
-          <Link href="/dashboard">Rooms</Link>
+          <Link href="/dashboard">Clubs</Link>
           <form action={signOut}><button className="text-button" type="submit">Sign out</button></form>
         </nav>
       </header>

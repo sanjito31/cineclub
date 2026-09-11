@@ -21,7 +21,7 @@ export default async function RoomFinalizePage({
 
   return (
     <main className="task-page">
-      <RoomTaskHeader />
+      <RoomTaskHeader code={room.code} />
       <RoomTaskIdentity name={room.name} code={room.code} />
       <div className="task-main">
         <FinalizePoller

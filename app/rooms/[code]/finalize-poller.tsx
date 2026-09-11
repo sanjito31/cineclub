@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type FinalizePollerProps = {
@@ -36,14 +36,12 @@ export function FinalizePoller({
   const router = useRouter();
   const [message, setMessage] = useState("Preparing the final order.");
   const [error, setError] = useState<string | null>(null);
-  const attempts = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
     let timeout: number | undefined;
 
     async function poll() {
-      attempts.current += 1;
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -69,7 +67,7 @@ export function FinalizePoller({
         }
 
         if (!response.ok) {
-          setError(body?.error ?? "Unable to finalize this room right now.");
+          setError(body?.error ?? "Unable to finalize this club right now.");
           timeout = window.setTimeout(poll, 4_000);
           return;
         }
@@ -80,7 +78,7 @@ export function FinalizePoller({
         router.refresh();
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause.message : "Unable to finalize this room right now.");
+        setError(cause instanceof Error ? cause.message : "Unable to finalize this club right now.");
         timeout = window.setTimeout(poll, 4_000);
       }
     }
@@ -97,7 +95,7 @@ export function FinalizePoller({
     <section className="panel selection-complete-panel" aria-labelledby="finalizing-heading">
       <span className="status-spinner finalizing-spinner" aria-hidden="true" />
       <div>
-        <span className="eyebrow">Room {code}</span>
+        <span className="eyebrow">Club {code}</span>
         <h2 id="finalizing-heading">Finalizing results</h2>
         <p>{message} Titles stay hidden until the host reveals them.</p>
         {error ? <p className="action-message is-error">{error}</p> : null}

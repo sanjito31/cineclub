@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { ProfileForm } from "@/app/onboarding/profile-form";
+import { PageNav } from "@/app/components/page-nav";
 import { requireUserOrRedirect } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { safeNextPath } from "@/lib/validation/shared";
@@ -24,10 +25,11 @@ export default async function OnboardingPage({
 
   return (
     <main className="centered-page">
+      <PageNav backHref="/" />
       <section className="auth-card">
         <span className="eyebrow">Almost there</span>
         <h1>Set up your movie-night profile</h1>
-        <p className="lede">This is what friends will see inside shared rooms.</p>
+        <p className="lede">This is what friends will see inside shared clubs.</p>
         <ProfileForm next={next} />
       </section>
     </main>

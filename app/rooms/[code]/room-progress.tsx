@@ -38,13 +38,13 @@ function phaseMessage({
 }) {
   if (!rosterLocked && phase === RoomPhase.SELECTION) {
     return completed === total
-      ? "Everyone currently in the room has submitted. The host can lock the roster to start voting."
+      ? "Everyone currently in the club has submitted. The host can lock the roster to start voting."
       : "You can start choosing movies now. The host will lock the roster when everyone has joined.";
   }
 
   if (phase === RoomPhase.SELECTION) {
     return completed === total
-      ? "Everyone has submitted. The room is moving to voting."
+      ? "Everyone has submitted. The club is moving to voting."
       : "Waiting for everyone to finish choosing their movies.";
   }
 
@@ -119,7 +119,7 @@ export function RoomProgress({
 
   return (
     <section className="panel progress-panel" aria-labelledby="room-progress-heading">
-      <div className="phase-pills" role="list" aria-label="Room phases">
+      <div className="phase-pills" role="list" aria-label="Club phases">
         {phaseOrder.map((p, i) => {
           const done = i < currentIndex;
           const active = p === phase;

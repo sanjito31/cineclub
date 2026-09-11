@@ -40,9 +40,9 @@ export function ConfirmRoomForm() {
   if (!draft) {
     return (
       <div className="empty-state">
-        <h2>Your room draft isn’t in this browser.</h2>
-        <p>Room settings are intentionally kept out of the database until after sign-in.</p>
-        <Link className="button button-primary" href="/create">Start a new room</Link>
+        <h2>Your club draft isn’t in this browser.</h2>
+        <p>Club settings are intentionally kept out of the database until after sign-in.</p>
+        <Link className="button button-primary" href="/create">Start a new club</Link>
       </div>
     );
   }
@@ -70,7 +70,7 @@ export function ConfirmRoomForm() {
         </dl>
       </div>
       <ActionMessage status={state.status} message={state.message} />
-      <SubmitButton pendingLabel="Creating room…">Create room</SubmitButton>
+      <SubmitButton pendingLabel="Creating club…">Create club</SubmitButton>
       <Link className="text-link" href="/create">Edit settings</Link>
     </form>
   );

@@ -14,12 +14,12 @@ export const dynamic = "force-dynamic";
 
 function BallotReview({ ranks, code }: { ranks: SubmittedBallotRankView[]; code: string }) {
   return (
-    <section className="panel" aria-labelledby="ballot-review-heading">
+    <section className="panel voting-review-panel" aria-labelledby="ballot-review-heading">
       <span className="selection-complete-mark" aria-hidden="true">✓</span>
       <div>
         <span className="eyebrow">Ballot submitted</span>
         <h2 id="ballot-review-heading">Your ranked ballot</h2>
-        <p>Waiting for remaining voters. Head back to the room to follow progress.</p>
+        <p>Waiting for remaining voters. Head back to the club to follow progress.</p>
       </div>
       <ol className="submission-review-list">
         {ranks.map((movie) => (
@@ -75,8 +75,8 @@ export default async function RoomVotingPage({
 
   return (
     <main className="task-page">
-      <RoomTaskHeader />
-      <RoomTaskIdentity name={voting.name} code={voting.code} />
+      <RoomTaskHeader code={voting.code} />
+      <RoomTaskIdentity name={voting.name} code={voting.code} variant="ballot" />
       <div className="task-main">
         {voting.alreadySubmitted ? (
           <BallotReview ranks={ballot} code={voting.code} />

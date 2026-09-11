@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/app/auth/auth-form";
+import { BackButton } from "@/app/components/back-button";
+import { GlobalMenu } from "@/app/components/global-menu";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getProfile } from "@/lib/data/profiles";
 import { safeNextPath } from "@/lib/validation/shared";
@@ -25,17 +26,15 @@ export default async function AuthPage({
   }
 
   return (
-    <main className="centered-page">
-      <section className="auth-card">
-        <Link className="back-link" href="/">← Back to Cineclub</Link>
-        <span className="eyebrow">Your seat is waiting</span>
-        <h1>Sign in with email</h1>
-        <p className="lede">We’ll send a one-time sign-in link. No passwords to remember between movie nights.</p>
-        {invalidLink ? (
+    <main className="tv-page">
+      <BackButton href="/" />
+      <GlobalMenu />
+      {invalidLink ? (
+        <div className="tv-page-header">
           <p className="action-message is-error" role="alert">That sign-in link is invalid or expired. Request a new link below.</p>
-        ) : null}
-        <AuthForm next={next} />
-      </section>
+        </div>
+      ) : null}
+      <AuthForm next={next} />
     </main>
   );
 }

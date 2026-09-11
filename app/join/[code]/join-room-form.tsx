@@ -13,7 +13,7 @@ export function JoinRoomForm({ code }: { code: string }) {
     <form action={action} className="form-stack">
       <input name="code" type="hidden" value={code} />
       <ActionMessage status={state.status} message={state.message} />
-      <SubmitButton pendingLabel="Taking your seat…">Confirm and join</SubmitButton>
+      <SubmitButton pendingLabel="Taking your seat…" className="join-welcome-btn">Confirm and join</SubmitButton>
     </form>
   );
 }
