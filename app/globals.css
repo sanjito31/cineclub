@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+.host-results-navigation { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+.host-results-panel .section-heading { flex-wrap: wrap; gap: 16px; }
+.host-results-official { font-size: 13px; font-weight: 700; }
+.host-results-order { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.host-results-order label { font-weight: 700; }
+.host-results-order .setting-select { width: auto; max-width: 100%; color: var(--stroke-ink); }
+.host-results-table-scroll { overflow-x: auto; margin-top: 20px; }
+.host-results-table-scroll:focus-visible { outline: 2px solid var(--orange); outline-offset: 4px; }
+.host-results-table { width: 100%; min-width: 580px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.host-results-table caption { text-align: left; padding: 0 0 14px; font-weight: 700; }
+.host-results-table th, .host-results-table td { padding: 16px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.host-results-table thead th { font-size: 12px; white-space: nowrap; }
+.host-results-table tbody th { min-width: 190px; }
+.host-results-table small { display: block; margin-top: 5px; font-size: 12px; font-weight: 400; }
+.host-results-legend { margin-top: 20px; max-width: 760px; }
+
 @font-face {
   font-family: 'Climate Crisis Variable';
   src: url('/fonts/ClimateCrisisVariable.woff2') format('woff2-variations'),

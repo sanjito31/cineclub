@@ -36,7 +36,9 @@ rotation.
 
 The publishable key is designed for browser use. Never put a Supabase secret/service-role key in a `NEXT_PUBLIC_` variable.
 
-In Supabase Authentication → URL Configuration, allow the callback URLs used by each environment, including `http://localhost:3000/auth/confirm` during local development and `https://your-domain.example/auth/confirm` in production. The default Magic Link template can remain unchanged; Cineclub passes this callback through `emailRedirectTo` and exchanges the returned PKCE code for a cookie-backed session.
+In Supabase Authentication → URL Configuration, allow the callback URLs used by each environment, including `http://localhost:3000/**` during local development and `https://your-domain.example/auth/confirm` in production. The default Magic Link template can remain unchanged; Cineclub passes this callback through `emailRedirectTo` and exchanges the returned PKCE code for a cookie-backed session.
+
+Keep `NEXT_PUBLIC_SITE_URL=http://localhost:3000` in `.env.local` and set the production URL in your deployment environment. The login action prefers this setting over the request origin; adding localhost to Supabase’s allowed redirect URLs does not override it. After changing the setting, restart the dev server and request a new sign-in email. Custom email templates should use `{{ .ConfirmationURL }}` rather than a link hardcoded to `{{ .SiteURL }}` so they respect the requested callback.
 
 `WATCHBOXD_API_URL` can override the default `https://watchboxd.vercel.app` server-side integration URL when needed.
 

@@ -19,6 +19,7 @@ import { RoomProgress } from "@/app/rooms/[code]/room-progress";
 import { ShareControls } from "@/app/rooms/[code]/share-controls";
 import { RoomPhase } from "@/app/generated/prisma/enums";
 import { finalistOrderingLabel } from "@/lib/domain/finalist-ordering";
+import { roomResultsPath } from "@/lib/domain/room-paths";
 import { canRevertRoomPhase, revertTarget, roomPhaseLabels } from "@/lib/domain/room-lifecycle";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,18 @@ export default async function RoomPage({
             submitted={submitted}
             roomCode={room.code}
           />
+          {isOwner && (room.phase === RoomPhase.REVEAL || room.phase === RoomPhase.COMPLETE) ? (
+            <section className="panel">
+              <span className="eyebrow">Host only</span>
+              <h2>Finalist results</h2>
+              <p className="muted-copy">
+                See every finalist’s ranking, score, and votes. Compare reveal orders, including unrevealed movies.
+              </p>
+              <Link className="button button-secondary button-small" href={roomResultsPath(room.code)}>
+                View host results
+              </Link>
+            </section>
+          ) : null}
           <section className="panel">
             <div className="section-heading">
               <div>
