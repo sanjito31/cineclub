@@ -61,6 +61,61 @@ export type TmdbSearchOptions = TmdbRequestOptions & {
 
 export type TmdbMovieDetailsOptions = TmdbRequestOptions;
 
+export type TmdbDiscoverSort =
+  | "popularity.desc"
+  | "vote_average.desc"
+  | "primary_release_date.desc";
+
+// List filters (genres, cast, crew, keywords) require every id to match
+export type TmdbDiscoverFilters = {
+  genreIds?: number[];
+  excludeGenreIds?: number[];
+  castIds?: number[];
+  crewIds?: number[];
+  keywordIds?: number[];
+  releaseYearFrom?: number;
+  releaseYearTo?: number;
+  runtimeMin?: number;
+  runtimeMax?: number;
+  originalLanguage?: string;            // ISO 639-1, e.g. "ko"
+  minRating?: number;                   // 0-10 vote average
+  minVoteCount?: number;
+  sortBy?: TmdbDiscoverSort;
+};
+
+export type TmdbPersonResult = {
+  tmdbPersonId: number;
+  name: string;
+  knownForDepartment: string | null;
+};
+
+export type TmdbKeywordResult = {
+  tmdbKeywordId: number;
+  name: string;
+};
+
+// TMDB's fixed movie genre ids (GET /genre/movie/list)
+export const TMDB_MOVIE_GENRES = {
+  action: 28,
+  adventure: 12,
+  animation: 16,
+  comedy: 35,
+  crime: 80,
+  documentary: 99,
+  drama: 18,
+  family: 10751,
+  fantasy: 14,
+  history: 36,
+  horror: 27,
+  music: 10402,
+  mystery: 9648,
+  romance: 10749,
+  "science fiction": 878,
+  thriller: 53,
+  war: 10752,
+  western: 37,
+} as const;
+
 export const TMDB_NATIVE_PAGE_SIZE = 20;
 export const SEARCH_RESULTS_PER_PAGE = 5;
 export const MAXIMUM_SEARCH_PAGE = 2000;
@@ -127,6 +182,109 @@ export function normalizeSearchPage(page: number | undefined) {
     );
   }
   return normalized;
+}
+
+function discoverSearchParams(filters: TmdbDiscoverFilters) {
+  const invalid = (message: string) =>
+    new TmdbServiceError("invalid_query", message);
+  const isNonNegativeInteger = (value: number) =>
+    Number.isInteger(value) && value >= 0;
+
+  const idLists = [
+    filters.genreIds,
+    filters.excludeGenreIds,
+    filters.castIds,
+    filters.crewIds,
+    filters.keywordIds,
+  ];
+  if (idLists.some((ids) => ids?.some((id) => !Number.isInteger(id) || id <= 0))) {
+    throw invalid("TMDB ids must be positive integers.");
+  }
+
+  const { releaseYearFrom, releaseYearTo, runtimeMin, runtimeMax } = filters;
+  for (const year of [releaseYearFrom, releaseYearTo]) {
+    if (year !== undefined && (!Number.isInteger(year) || year < 1870 || year > 2100)) {
+      throw invalid("Release years must be integers between 1870 and 2100.");
+    }
+  }
+  if (releaseYearFrom !== undefined && releaseYearTo !== undefined && releaseYearFrom > releaseYearTo) {
+    throw invalid("The start year must not be after the end year.");
+  }
+  for (const minutes of [runtimeMin, runtimeMax]) {
+    if (minutes !== undefined && !isNonNegativeInteger(minutes)) {
+      throw invalid("Runtimes must be non-negative whole minutes.");
+    }
+  }
+  if (runtimeMin !== undefined && runtimeMax !== undefined && runtimeMin > runtimeMax) {
+    throw invalid("The minimum runtime must not exceed the maximum runtime.");
+  }
+  if (filters.minRating !== undefined && !(filters.minRating >= 0 && filters.minRating <= 10)) {
+    throw invalid("Minimum rating must be between 0 and 10.");
+  }
+  if (filters.minVoteCount !== undefined && !isNonNegativeInteger(filters.minVoteCount)) {
+    throw invalid("Minimum vote count must be a non-negative integer.");
+  }
+  if (filters.originalLanguage !== undefined && !/^[a-z]{2}$/.test(filters.originalLanguage)) {
+    throw invalid("Original language must be a two-letter ISO 639-1 code.");
+  }
+
+  const params: Record<string, string> = {
+    include_adult: "false",
+    language: "en-US",
+    sort_by: filters.sortBy ?? "popularity.desc",
+  };
+  // TMDB treats comma-separated ids as AND
+  if (filters.genreIds?.length) params.with_genres = filters.genreIds.join(",");
+  if (filters.excludeGenreIds?.length) params.without_genres = filters.excludeGenreIds.join(",");
+  if (filters.castIds?.length) params.with_cast = filters.castIds.join(",");
+  if (filters.crewIds?.length) params.with_crew = filters.crewIds.join(",");
+  if (filters.keywordIds?.length) params.with_keywords = filters.keywordIds.join(",");
+  if (releaseYearFrom !== undefined) {
+    params["primary_release_date.gte"] = `${releaseYearFrom}-01-01`;
+  }
+  if (releaseYearTo !== undefined) {
+    params["primary_release_date.lte"] = `${releaseYearTo}-12-31`;
+  }
+  if (runtimeMin !== undefined) params["with_runtime.gte"] = String(runtimeMin);
+  if (runtimeMax !== undefined) params["with_runtime.lte"] = String(runtimeMax);
+  if (filters.originalLanguage) params.with_original_language = filters.originalLanguage;
+  if (filters.minRating !== undefined) params["vote_average.gte"] = String(filters.minRating);
+  if (filters.minVoteCount !== undefined) params["vote_count.gte"] = String(filters.minVoteCount);
+  return params;
+}
+
+function readResultsArray(value: unknown, malformedMessage: string) {
+  const results = value && typeof value === "object"
+    ? (value as Record<string, unknown>).results
+    : undefined;
+  if (!Array.isArray(results)) {
+    throw new TmdbServiceError("malformed_response", malformedMessage);
+  }
+  return results as unknown[];
+}
+
+export function normalizeTmdbPeopleResponse(value: unknown): TmdbPersonResult[] {
+  return readResultsArray(value, "TMDB returned an invalid people search response.")
+    .flatMap((item) => {
+      const person = (item ?? {}) as Record<string, unknown>;
+      const name = optionalString(person.name);
+      if (!Number.isInteger(person.id) || (person.id as number) <= 0 || !name) return [];
+      return [{
+        tmdbPersonId: person.id as number,
+        name,
+        knownForDepartment: optionalString(person.known_for_department),
+      }];
+    });
+}
+
+export function normalizeTmdbKeywordResponse(value: unknown): TmdbKeywordResult[] {
+  return readResultsArray(value, "TMDB returned an invalid keyword search response.")
+    .flatMap((item) => {
+      const keyword = (item ?? {}) as Record<string, unknown>;
+      const name = optionalString(keyword.name);
+      if (!Number.isInteger(keyword.id) || (keyword.id as number) <= 0 || !name) return [];
+      return [{ tmdbKeywordId: keyword.id as number, name }];
+    });
 }
 
 function normalizeBaseUrl(value: string | undefined) {
@@ -413,6 +571,66 @@ export function createTmdbClient(config: TmdbClientConfig = {}) {
         },
       );
       return normalizeTmdbSearchResponse(body);
+    },
+    async discoverMovies(
+      filters: TmdbDiscoverFilters,
+      options: TmdbSearchOptions = {},
+    ): Promise<TmdbMovieSearchPage> {
+      const searchParams = discoverSearchParams(filters);
+      const page = normalizePage(options.page);
+      const body = await requestJson(
+        "/discover/movie",
+        { ...searchParams, page: String(page) },
+        options,
+        {
+          aborted: "TMDB movie discovery was cancelled.",
+          malformed: "TMDB returned an invalid movie discovery response.",
+          timeout: "TMDB movie discovery took too long. Please try again.",
+          unavailable: "TMDB movie discovery is unavailable right now.",
+        },
+      );
+      // Discover responses share the search envelope
+      return normalizeTmdbSearchResponse(body);
+    },
+    // Results come back most popular first
+    async searchPeople(
+      query: string,
+      options: TmdbRequestOptions = {},
+    ): Promise<TmdbPersonResult[]> {
+      const body = await requestJson(
+        "/search/person",
+        {
+          query: normalizeQuery(query),
+          include_adult: "false",
+          language: "en-US",
+          page: "1",
+        },
+        options,
+        {
+          aborted: "TMDB people search was cancelled.",
+          malformed: "TMDB returned an invalid people search response.",
+          timeout: "TMDB people search took too long. Please try again.",
+          unavailable: "TMDB people search is unavailable right now.",
+        },
+      );
+      return normalizeTmdbPeopleResponse(body);
+    },
+    async searchKeywords(
+      query: string,
+      options: TmdbRequestOptions = {},
+    ): Promise<TmdbKeywordResult[]> {
+      const body = await requestJson(
+        "/search/keyword",
+        { query: normalizeQuery(query), page: "1" },
+        options,
+        {
+          aborted: "TMDB keyword search was cancelled.",
+          malformed: "TMDB returned an invalid keyword search response.",
+          timeout: "TMDB keyword search took too long. Please try again.",
+          unavailable: "TMDB keyword search is unavailable right now.",
+        },
+      );
+      return normalizeTmdbKeywordResponse(body);
     },
     async getMovie(
       tmdbId: number,

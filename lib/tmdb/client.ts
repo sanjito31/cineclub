@@ -4,7 +4,11 @@ import {
   createTmdbClient,
   loadTmdbMovieOverviews,
   TmdbServiceError,
+  type TmdbDiscoverFilters,
+  type TmdbKeywordResult,
   type TmdbMovieDetailsOptions,
+  type TmdbPersonResult,
+  type TmdbRequestOptions,
   type TmdbMovieSearchPage,
   type TmdbMovieSearchResult,
   type TmdbSearchOptions,
@@ -35,6 +39,27 @@ export function searchTmdbMovies(
   return createTmdbClient(readEnvironment()).searchMovies(query, options);
 }
 
+export function discoverTmdbMovies(
+  filters: TmdbDiscoverFilters,
+  options?: TmdbSearchOptions,
+): Promise<TmdbMovieSearchPage> {
+  return createTmdbClient(readEnvironment()).discoverMovies(filters, options);
+}
+
+export function searchTmdbPeople(
+  query: string,
+  options?: TmdbRequestOptions,
+): Promise<TmdbPersonResult[]> {
+  return createTmdbClient(readEnvironment()).searchPeople(query, options);
+}
+
+export function searchTmdbKeywords(
+  query: string,
+  options?: TmdbRequestOptions,
+): Promise<TmdbKeywordResult[]> {
+  return createTmdbClient(readEnvironment()).searchKeywords(query, options);
+}
+
 export function getTmdbMovie(
   tmdbId: number,
   options?: TmdbMovieDetailsOptions,
@@ -62,7 +87,11 @@ export async function getTmdbMovieOverviews(
 }
 
 export type {
+  TmdbDiscoverFilters,
+  TmdbDiscoverSort,
+  TmdbKeywordResult,
   TmdbMovieDetailsOptions,
+  TmdbPersonResult,
   TmdbMovieSearchPage,
   TmdbMovieSearchResult,
   TmdbSearchOptions,
@@ -70,6 +99,7 @@ export type {
 export {
   MAXIMUM_SEARCH_PAGE,
   SEARCH_RESULTS_PER_PAGE,
+  TMDB_MOVIE_GENRES,
   TmdbServiceError,
   loadTmdbMovieOverviews,
   normalizeSearchPage,

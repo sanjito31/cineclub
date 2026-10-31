@@ -131,6 +131,115 @@ test("TMDB search rejects invalid input before contacting the API", async () => 
   assert.equal(contacted, false);
 });
 
+test("TMDB discover maps filters to discover query params", async () => {
+  let requestedUrl: URL | null = null;
+  const fetchImpl: typeof fetch = async (input) => {
+    requestedUrl = new URL(String(input));
+    return jsonResponse({
+      page: 2,
+      total_pages: 5,
+      total_results: 90,
+      results: [{ id: 694, title: "The Shining", release_date: "1980-05-23" }],
+    });
+  };
+
+  const result = await createTmdbClient({
+    fetchImpl,
+    readAccessToken: "server-secret",
+  }).discoverMovies(
+    {
+      genreIds: [27, 53],
+      excludeGenreIds: [35],
+      castIds: [1532],
+      crewIds: [5655],
+      keywordIds: [10051],
+      releaseYearFrom: 1980,
+      releaseYearTo: 1989,
+      runtimeMin: 60,
+      runtimeMax: 150,
+      originalLanguage: "en",
+      minRating: 7,
+      sortBy: "vote_average.desc",
+      minVoteCount: 200,
+    },
+    { page: 2 },
+  );
+
+  const discoverUrl = requestedUrl as URL | null;
+  assert.ok(discoverUrl);
+  assert.equal(discoverUrl.pathname, "/3/discover/movie");
+  assert.equal(discoverUrl.searchParams.get("with_genres"), "27,53");
+  assert.equal(discoverUrl.searchParams.get("without_genres"), "35");
+  assert.equal(discoverUrl.searchParams.get("with_cast"), "1532");
+  assert.equal(discoverUrl.searchParams.get("with_crew"), "5655");
+  assert.equal(discoverUrl.searchParams.get("with_keywords"), "10051");
+  assert.equal(discoverUrl.searchParams.get("primary_release_date.gte"), "1980-01-01");
+  assert.equal(discoverUrl.searchParams.get("primary_release_date.lte"), "1989-12-31");
+  assert.equal(discoverUrl.searchParams.get("with_runtime.gte"), "60");
+  assert.equal(discoverUrl.searchParams.get("with_runtime.lte"), "150");
+  assert.equal(discoverUrl.searchParams.get("with_original_language"), "en");
+  assert.equal(discoverUrl.searchParams.get("vote_average.gte"), "7");
+  assert.equal(discoverUrl.searchParams.get("sort_by"), "vote_average.desc");
+  assert.equal(discoverUrl.searchParams.get("vote_count.gte"), "200");
+  assert.equal(discoverUrl.searchParams.get("include_adult"), "false");
+  assert.equal(discoverUrl.searchParams.get("page"), "2");
+  assert.equal(result.results[0].tmdbId, 694);
+  assert.equal(result.results[0].releaseYear, 1980);
+});
+
+test("TMDB discover rejects invalid filters before contacting the API", async () => {
+  let contacted = false;
+  const client = createTmdbClient({
+    apiKey: "server-secret",
+    fetchImpl: async () => {
+      contacted = true;
+      return jsonResponse({});
+    },
+  });
+
+  const invalidFilters = [
+    { releaseYearFrom: 1990, releaseYearTo: 1980 },
+    { runtimeMin: 120, runtimeMax: 90 },
+    { originalLanguage: "english" },
+    { castIds: [0] },
+    { minRating: 11 },
+  ];
+  for (const filters of invalidFilters) {
+    await assert.rejects(
+      () => client.discoverMovies(filters),
+      (error: unknown) =>
+        error instanceof TmdbServiceError && error.code === "invalid_query",
+    );
+  }
+  assert.equal(contacted, false);
+});
+
+test("TMDB people and keyword searches normalize results", async () => {
+  const requestedPaths: string[] = [];
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = new URL(String(input));
+    requestedPaths.push(url.pathname);
+    if (url.pathname === "/3/search/person") {
+      return jsonResponse({
+        results: [
+          { id: 5655, name: "Wes Anderson", known_for_department: "Directing" },
+          { id: "bad", name: "Malformed" },
+        ],
+      });
+    }
+    return jsonResponse({ results: [{ id: 10051, name: "heist" }, { id: 7, name: "" }] });
+  };
+  const client = createTmdbClient({ fetchImpl, readAccessToken: "server-secret" });
+
+  assert.deepEqual(await client.searchPeople("Wes Anderson"), [
+    { tmdbPersonId: 5655, name: "Wes Anderson", knownForDepartment: "Directing" },
+  ]);
+  assert.deepEqual(await client.searchKeywords("heist"), [
+    { tmdbKeywordId: 10051, name: "heist" },
+  ]);
+  assert.deepEqual(requestedPaths, ["/3/search/person", "/3/search/keyword"]);
+});
+
 test("TMDB movie details normalize overviews by tmdb id", async () => {
   const requestedUrls: URL[] = [];
   const fetchImpl: typeof fetch = async (input) => {
