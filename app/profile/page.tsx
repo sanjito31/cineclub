@@ -3,7 +3,9 @@ import { ProfileForm } from "@/app/onboarding/profile-form";
 import { signOut } from "@/app/actions/auth";
 import { BackButton } from "@/app/components/back-button";
 import { GlobalMenu } from "@/app/components/global-menu";
+import { PasswordForm } from "@/app/profile/password-form";
 import { requireUserOrRedirect } from "@/lib/auth/session";
+import { getSignInMethod } from "@/lib/auth/sign-in-method";
 import { getProfile } from "@/lib/data/profiles";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +13,8 @@ export const dynamic = "force-dynamic";
 export default async function ProfilePage() {
   const user = await requireUserOrRedirect("/profile");
   const profile = await getProfile(user.id);
+  // Same lookup the sign-in page uses, so the two always agree.
+  const signInMethod = user.email ? await getSignInMethod(user.email) : null;
 
   return (
     <main className="centered-page">
@@ -28,6 +32,7 @@ export default async function ProfilePage() {
         <h1>{profile ? "Edit your profile" : "Create your profile"}</h1>
         <p className="lede">Signed in as {user.email ?? "your Supabase account"}.</p>
         <ProfileForm next="/dashboard" profile={profile} submitLabel="Save profile" />
+        <PasswordForm hasPassword={signInMethod === "password"} />
       </section>
     </main>
   );

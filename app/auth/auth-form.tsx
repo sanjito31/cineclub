@@ -1,13 +1,47 @@
 "use client";
 
-import { useActionState } from "react";
-import { sendMagicLink, type MagicLinkActionState } from "@/app/actions/auth";
+import { useActionState, useState } from "react";
+import { submitSignIn, type AuthActionState } from "@/app/actions/auth";
 import { ActionMessage } from "@/app/components/action-message";
 import { SubmitButton } from "@/app/components/submit-button";
 import { BrandMark } from "@/app/components/brand-mark";
 import { EyeTile } from "@/app/components/eye-tile";
 
-const initialState: MagicLinkActionState = { status: "idle" };
+const initialState: AuthActionState = { status: "idle" };
+
+// "email" asks only for the address; the server answers with the password
+// step for password accounts or sends a magic link to everyone else.
+type AuthMode = "email" | "password" | "signup";
+
+const modeCopy: Record<AuthMode, {
+  heading: [string, string];
+  lede: string;
+  button: string;
+  pendingLabel: string;
+  footnote: string;
+}> = {
+  email: {
+    heading: ["Sign In", "With Email"],
+    lede: "Enter your email. We’ll ask for your password if you have one, or email you a ticket straight to this seat.",
+    button: "Continue",
+    pendingLabel: "Checking…",
+    footnote: "No password? New emails get a sign-in link and an account automatically.",
+  },
+  password: {
+    heading: ["Enter Your", "Password"],
+    lede: "This email has a password. Enter it to take your seat.",
+    button: "Sign In",
+    pendingLabel: "Signing In…",
+    footnote: "Forgot password? Tap here for an emailed sign-in link, then change it in your profile.",
+  },
+  signup: {
+    heading: ["Sign Up", "With Email"],
+    lede: "Pick a password to keep your seat. We may email you to confirm it.",
+    button: "Create Account",
+    pendingLabel: "Creating…",
+    footnote: "Passwords need at least 6 characters.",
+  },
+};
 
 function BrandTile() {
   return (
@@ -24,7 +58,10 @@ function BrandTile() {
 }
 
 export function AuthForm({ next }: { next: string }) {
-  const [state, action] = useActionState(sendMagicLink, initialState);
+  const [state, action] = useActionState(submitSignIn, initialState);
+  const [signingUp, setSigningUp] = useState(false);
+  const mode: AuthMode = signingUp ? "signup" : state.passwordRequired ? "password" : "email";
+  const copy = modeCopy[mode];
 
   if (state.linkSent && state.email) {
     return (
@@ -116,6 +153,7 @@ export function AuthForm({ next }: { next: string }) {
   return (
     <form action={action} className="tv-wall tv-wall--idle">
       <input name="next" type="hidden" value={next} />
+      <input name="mode" type="hidden" value={mode} />
 
       <div className="tv-bleed is-h" style={{ top: "17.4%", background: "linear-gradient(90deg, #a59723 0 16%, #3d8b9c 16% 34%, #317133 34% 52%, #a83d80 52% 70%, #8f1820 70% 86%, #202657 86% 100%)" }} />
       <div className="tv-bleed is-h" style={{ top: "29%", background: "linear-gradient(90deg, #8f1820 0 22%, #f0c74e 22% 44%, #3d8b9c 44% 66%, #8a5389 66% 100%)", opacity: .4 }} />
@@ -151,8 +189,8 @@ export function AuthForm({ next }: { next: string }) {
 
       <div className="tv-tile tv-headline-tile">
         <div className="tv-screen">
-          <h1 className="tv-headline-text">Sign In<br />With Email</h1>
-          <p className="tv-headline-lede">One link, no password. We&rsquo;ll email you a ticket straight to this seat.</p>
+          <h1 className="tv-headline-text">{copy.heading[0]}<br />{copy.heading[1]}</h1>
+          <p className="tv-headline-lede">{copy.lede}</p>
           <div className="tv-ident-strip" />
           <div className="tv-dot-strip" />
         </div>
@@ -178,17 +216,48 @@ export function AuthForm({ next }: { next: string }) {
             defaultValue={state.email}
             required
             autoFocus
+            readOnly={mode === "password"}
             className="tv-input-field"
           />
+          {mode !== "email" ? (
+            <>
+              <label htmlFor="password" className="tv-input-label">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                minLength={mode === "signup" ? 6 : undefined}
+                required
+                autoFocus={mode === "password"}
+                className="tv-input-field"
+              />
+            </>
+          ) : null}
           <ActionMessage status={state.status} message={state.message} />
+          {mode === "email" ? (
+            <button type="button" className="tv-text-button" onClick={() => setSigningUp(true)}>
+              New here? Create a password instead
+            </button>
+          ) : null}
+          {mode === "password" ? (
+            <a className="tv-text-button" href={`/auth?next=${encodeURIComponent(next)}`}>
+              Use a different email
+            </a>
+          ) : null}
+          {mode === "signup" ? (
+            <button type="button" className="tv-text-button" onClick={() => setSigningUp(false)}>
+              Back to sign in
+            </button>
+          ) : null}
         </div>
         <div className="tv-dots"><span /><span /><span /><span /></div>
       </div>
 
       <div className="tv-tile tv-button-tile">
-        <SubmitButton className="tv-screen tv-button-screen" pendingLabel="Sending…">
+        <SubmitButton className="tv-screen tv-button-screen" pendingLabel={copy.pendingLabel}>
           <span className="tv-btn-label">
-            Email My Ticket
+            {copy.button}
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
           </span>
           <span className="tv-ticket-no tv-ticket-no--button">No. 048213</span>
@@ -197,7 +266,14 @@ export function AuthForm({ next }: { next: string }) {
       </div>
 
       <div className="tv-tile tv-footnote-tile">
-        <div className="tv-screen"><p className="tv-footnote-text">No password. New emails create an account automatically.</p></div>
+        {mode === "password" ? (
+          // After the main button in DOM order, so Enter still signs in.
+          <button type="submit" name="intent" value="link" formNoValidate className="tv-screen tv-footnote-button">
+            <span className="tv-footnote-text">{copy.footnote}</span>
+          </button>
+        ) : (
+          <div className="tv-screen"><p className="tv-footnote-text">{copy.footnote}</p></div>
+        )}
         <div className="tv-dots"><span /><span /></div>
       </div>
     </form>
