@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ChatAgent, OpenAIProvider, type Tool } from "@/lib/llm";
+import { lookupWatchedByUsernames } from "@/lib/data/watchboxd-room";
 import {
   discoverTmdbMovies,
   searchTmdbKeywords,
@@ -16,6 +17,7 @@ Always look movies up with your tools instead of answering from memory.
 - Use discover_movies to browse by any combination of genre, era, runtime, language, rating, cast, crew (directors, writers), or keywords (themes like "heist" or "time travel"). E.g. "Wes Anderson films with Bill Murray" or "best 80s horror".
 - Use search_movies when the user names or hints at a specific title.
 - If discover_movies reports matched people or keywords that look wrong, retry with a more specific name.
+- When the user wants movies they (or their group) haven't seen, pass their Letterboxd usernames as excludeWatchedBy. Ask for the usernames if you don't have them. If a filtered page comes back short, fetch the next page.
 Reply briefly. For each candidate give the title, release year, and TMDB id.
 If nothing matches, say so and ask for more detail.`;
 
@@ -39,6 +41,40 @@ function summarizeResults(result: TmdbMovieSearchPage) {
       overview: movie.overview,
       voteAverage: movie.voteAverage,
     })),
+  };
+}
+
+const EXCLUDE_WATCHED_BY_SCHEMA = {
+  type: "array",
+  items: { type: "string" },
+  maxItems: 10,
+  description:
+    "Letterboxd usernames (1-10). Drops movies any of them has watched. Filtering happens after TMDB returns the page, so fewer than 20 results may come back.",
+};
+
+// Drops movies any of the users has logged on Letterboxd, and reports what was dropped
+async function removeWatched(
+  summary: ReturnType<typeof summarizeResults>,
+  usernames: string[],
+) {
+  if (usernames.length === 0) return summary;
+
+  const { watchedBy, uncheckedTmdbIds } = await lookupWatchedByUsernames(
+    usernames,
+    summary.results.map((movie) => movie.tmdbId),
+  );
+  const unwatched = summary.results.filter((movie) => !watchedBy.has(movie.tmdbId));
+  const removedAsWatched = summary.results
+    .filter((movie) => watchedBy.has(movie.tmdbId))
+    .map((movie) => ({ title: movie.title, watchedBy: watchedBy.get(movie.tmdbId) }));
+
+  return {
+    ...summary,
+    results: unwatched,
+    removedAsWatched,
+    ...(uncheckedTmdbIds.length > 0 && {
+      watchStatusNote: `${uncheckedTmdbIds.length} results were kept unchecked because Letterboxd history is still syncing or unavailable (tmdbIds: ${uncheckedTmdbIds.join(", ")}). Retrying in a few seconds may filter them.`,
+    }),
   };
 }
 
@@ -84,6 +120,7 @@ export const searchMoviesTool: Tool = {
       properties: {
         query: { type: "string", description: "Movie title to search for" },
         page: { type: "integer", minimum: 1, description: "Results page, defaults to 1" },
+        excludeWatchedBy: EXCLUDE_WATCHED_BY_SCHEMA,
       },
       required: ["query"],
     },
@@ -92,7 +129,7 @@ export const searchMoviesTool: Tool = {
     const result = await searchTmdbMovies(String(input.query), {
       page: optionalNumber(input.page),
     });
-    return summarizeResults(result);
+    return removeWatched(summarizeResults(result), stringList(input.excludeWatchedBy));
   },
 };
 
@@ -155,6 +192,7 @@ export const discoverMoviesTool: Tool = {
           description: "Defaults to popularity",
         },
         page: { type: "integer", minimum: 1, description: "Results page, defaults to 1" },
+        excludeWatchedBy: EXCLUDE_WATCHED_BY_SCHEMA,
       },
     },
   },
@@ -198,7 +236,7 @@ export const discoverMoviesTool: Tool = {
     // Echo what each name resolved to so the model can catch a wrong match
     return {
       matched: { cast, crew, keywords },
-      ...summarizeResults(result),
+      ...(await removeWatched(summarizeResults(result), stringList(input.excludeWatchedBy))),
     };
   },
 };

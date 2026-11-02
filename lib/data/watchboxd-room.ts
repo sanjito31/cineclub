@@ -288,6 +288,56 @@ export async function lookupRoomWatchedIndex(input: {
   return watched;
 }
 
+export type WatchedByUsernames = {
+  watchedBy: Map<number, string[]>; // tmdbId -> usernames that watched it
+  uncheckedTmdbIds: number[];       // history still syncing or unavailable
+};
+
+// Checks each movie by TMDB id instead of loading full histories, which are
+// capped at MAXIMUM_WATCHED_PAGES and would miss films for heavy loggers.
+export async function lookupWatchedByUsernames(
+  usernames: readonly string[],
+  tmdbIds: readonly number[],
+  signal?: AbortSignal,
+): Promise<WatchedByUsernames> {
+  const uniqueUsernames = [...new Set(
+    usernames.map((username) => username.trim().toLowerCase()).filter(Boolean),
+  )];
+  if (uniqueUsernames.length === 0) {
+    return { watchedBy: new Map(), uncheckedTmdbIds: [] };
+  }
+
+  const checks = await Promise.all(
+    tmdbIds.map(async (tmdbId) => {
+      const query = { tmdbId: String(tmdbId), page: "1", pageSize: "1" };
+      const result = uniqueUsernames.length === 1
+        ? await getWatchboxdWatchedHistory(uniqueUsernames[0], decodeWatchboxdWatchedPage, { query, signal })
+        : await getWatchboxdWatchedOverlap(uniqueUsernames, decodeWatchboxdWatchedOverlapPage, { query, signal });
+
+      if (result.status === "not_found") {
+        throw new WatchboxdInputError(
+          `Letterboxd user not found: ${uniqueUsernames.join(", ")}`,
+        );
+      }
+      if (result.status !== "ready") return { tmdbId, checked: false, watchers: [] };
+
+      const watchers = "items" in result.data
+        ? (result.data.items.length > 0 ? [uniqueUsernames[0]] : [])
+        : (result.data.films[0]?.watchedBy.map((user) => user.username) ?? []);
+      return { tmdbId, checked: true, watchers };
+    }),
+  );
+
+  return {
+    watchedBy: new Map(
+      checks
+        .filter((check) => check.watchers.length > 0)
+        .map((check) => [check.tmdbId, check.watchers]),
+    ),
+    uncheckedTmdbIds: checks.filter((check) => !check.checked).map((check) => check.tmdbId),
+  };
+}
+
 async function tmdbSnapshotForId(tmdbId: number | null, signal?: AbortSignal) {
   if (!tmdbId) return null;
   try {
