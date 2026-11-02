@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { parseSelectionMovie, type SelectionMovie } from "@/app/rooms/[code]/selection-contracts";
-import type { Msg } from "@/lib/llm";
 
 const MOVIES_PER_PAGE = 5;
 
@@ -13,7 +12,7 @@ type ChatEntry =
 
 type AgentEvent =
   | { type: "status"; text: string }
-  | { type: "done"; text: string; movies: unknown[]; history: Msg[] }
+  | { type: "done"; text: string; movies: unknown[]; conversationId: string }
   | { type: "error"; error: string };
 
 // Chat with the movie search agent. Each reply's picks are shown 5 at a time,
@@ -23,8 +22,8 @@ export function MovieAgentChat({ endpoint, renderMovie }: {
   renderMovie: (movie: SelectionMovie) => ReactNode;
 }) {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
-  // The agent's full transcript, including tool calls; the server is stateless
-  const [history, setHistory] = useState<Msg[]>([]);
+  // The server keeps the transcript; null starts a new conversation
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const pending = status !== null;
@@ -36,7 +35,7 @@ export function MovieAgentChat({ endpoint, renderMovie }: {
       const movies = agentEvent.movies
         .map(parseSelectionMovie)
         .filter((movie): movie is SelectionMovie => movie !== null);
-      setHistory(agentEvent.history);
+      setConversationId(agentEvent.conversationId);
       setEntries((current) => [...current, { role: "assistant", text: agentEvent.text, movies, page: 1 }]);
     } else {
       setEntries((current) => [...current, { role: "error", text: agentEvent.error }]);
@@ -56,7 +55,7 @@ export function MovieAgentChat({ endpoint, renderMovie }: {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify({ message, conversationId }),
       });
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -89,6 +88,11 @@ export function MovieAgentChat({ endpoint, renderMovie }: {
     }
   }
 
+  function startNewChat() {
+    setEntries([]);
+    setConversationId(null);
+  }
+
   function showPage(entryIndex: number, page: number) {
     setEntries((current) => current.map((entry, index) =>
       index === entryIndex && entry.role === "assistant" ? { ...entry, page } : entry));
@@ -100,7 +104,9 @@ export function MovieAgentChat({ endpoint, renderMovie }: {
         <span className="eyebrow">Need ideas?</span>
         <h3 id="movie-agent-heading">Ask the movie bot</h3>
         <p className="movie-agent-intro">Describe what you&rsquo;re in the mood for. It knows your group&rsquo;s Letterboxd accounts, so it can skip movies you&rsquo;ve seen.</p>
-      </div></div>
+      </div>
+      {entries.length > 0 ? <button className="button button-secondary button-compact" type="button" disabled={pending} onClick={startNewChat}>New chat</button> : null}
+      </div>
 
       {entries.length > 0 ? <ol className="movie-agent-thread" aria-live="polite">{entries.map((entry, entryIndex) => {
         if (entry.role !== "assistant") {

@@ -41,6 +41,7 @@ model Profile {
   updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   ownedRooms         Room[]            @relation("RoomOwner")
   roomParticipations RoomParticipant[]
+  movieAgentTurns    MovieAgentTurn[]
 
   @@map("profiles")
   @@schema("cineclub")
@@ -66,6 +67,7 @@ model Room {
   owner                      Profile           @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   participants               RoomParticipant[]
   movies                     RoomMovie[]
+  movieAgentTurns            MovieAgentTurn[]
 
   @@index([ownerId], map: "rooms_owner_id_idx")
   @@map("rooms")
@@ -180,5 +182,27 @@ model RoomMovieResult {
   @@unique([roomId, aggregateRank], map: "room_movie_results_room_id_aggregate_rank_key")
   @@unique([roomId, finalOrder], map: "room_movie_results_room_id_final_order_key")
   @@map("room_movie_results")
+  @@schema("cineclub")
+}
+
+// One message to the movie bot and the messages the agent added for it (tool calls,
+// tool results, reply). A conversation is its turns in order, kept server-side so
+// the client can't rewrite it. Usage limits count turns and tokens per user.
+model MovieAgentTurn {
+  id             String   @id(map: "movie_agent_turns_pkey") @default(uuid(7)) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  roomId         String   @map("room_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  messages       Json     @default("[]")
+  inputTokens    Int      @default(0) @map("input_tokens")
+  outputTokens   Int      @default(0) @map("output_tokens")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  room           Room     @relation(fields: [roomId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user           Profile  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([conversationId, createdAt], map: "movie_agent_turns_conversation_id_created_at_idx")
+  @@index([userId, createdAt], map: "movie_agent_turns_user_id_created_at_idx")
+  @@index([roomId], map: "movie_agent_turns_room_id_idx")
+  @@map("movie_agent_turns")
   @@schema("cineclub")
 }

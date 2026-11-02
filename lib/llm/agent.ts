@@ -1,4 +1,4 @@
-import type { LLMProvider, Msg, ToolDef, ToolResultBlock } from "./types";
+import type { LLMProvider, Msg, ToolDef, ToolResultBlock, Usage } from "./types";
 
 export type ToolContext = {
   reportStatus: (text: string) => void;                   // progress shown to the user while the tool runs
@@ -30,7 +30,10 @@ export class ChatAgent {
   async handleMessage(
     history: Msg[], 
     userText: string,
-    options: { onStatus?: (text: string) => void } = {}
+    options: {
+      onStatus?: (text: string) => void;
+      onUsage?: (usage: Usage) => void;                   // called after every provider call, even if the turn later fails
+    } = {}
 ): Promise<{ reply: string; history: Msg[] }> {
     const messages: Msg[] = [...history, { role: "user", content: userText }];
     const maxIterations = this.config.maxIterations ?? 10;
@@ -45,6 +48,7 @@ export class ChatAgent {
         tools: this.config.tools.map((t) => t.definition),
         maxTokens: this.config.maxTokens ?? 2048,
       });
+      options.onUsage?.(res.usage);
 
       messages.push(res.message);
 
