@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth/session";
 import { getSignInMethod } from "@/lib/auth/sign-in-method";
 import { normalizeEmail, safeNextPath } from "@/lib/validation/shared";
 import type { ActionState } from "@/app/actions/types";
@@ -100,7 +102,7 @@ async function signUpWithPassword(
     if (await getSignInMethod(email)) {
       return {
         status: "error",
-        message: "That email already has an account. Go back and sign in with it.",
+        message: "That email already has an account. Sign in with it, then add a password from your profile.",
         email,
         next,
       };
@@ -200,6 +202,45 @@ export async function submitSignIn(
   }
 
   return sendMagicLink(email, next);
+}
+
+// Adds a password to a magic-link account, or changes an existing one.
+// Setting has_password switches the sign-in page to the password step.
+export async function updatePassword(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const password = formData.get("password");
+  const confirmPassword = formData.get("confirmPassword");
+
+  if (typeof password !== "string" || password.length === 0) {
+    return { status: "error", message: "Enter a new password." };
+  }
+
+  if (password !== confirmPassword) {
+    return { status: "error", message: "Those passwords don’t match." };
+  }
+
+  try {
+    await requireUser();
+    const supabase = await createClient();
+    const { error } = await supabase.auth.updateUser({
+      password,
+      data: { has_password: true },
+    });
+
+    if (error) {
+      return { status: "error", message: error.message };
+    }
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Unable to save your password.",
+    };
+  }
+
+  revalidatePath("/profile");
+  return { status: "success", message: "Password saved. Use it next time you sign in." };
 }
 
 export async function signOut() {

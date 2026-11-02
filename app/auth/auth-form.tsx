@@ -32,7 +32,7 @@ const modeCopy: Record<AuthMode, {
     lede: "This email has a password. Enter it to take your seat.",
     button: "Sign In",
     pendingLabel: "Signing In…",
-    footnote: "Forgot it? Tap here to email a sign-in link instead.",
+    footnote: "Forgot password? Tap here for an emailed sign-in link, then change it in your profile.",
   },
   signup: {
     heading: ["Sign Up", "With Email"],

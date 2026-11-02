@@ -390,6 +390,8 @@ button { color: inherit; }
 .field-group input { width: 100%; min-height: 50px; padding: 0 14px; border: 1.5px solid rgba(36, 26, 18, .3); border-radius: 6px; outline: none; background: #fffdf8; }
 .field-group input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(237, 90, 42, .12); }
 .field-group small { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.account-password { margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--line); }
+.account-password > p { margin: 8px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .action-message { margin: 0; padding: 11px 13px; border-radius: 5px; font-size: 13px; line-height: 1.45; }
 .action-message.is-error { color: #8b2414; background: #fbe5df; }
 .action-message.is-success { color: #245440; background: #dfefe7; }
