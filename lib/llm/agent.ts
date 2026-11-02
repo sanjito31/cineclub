@@ -1,8 +1,12 @@
 import type { LLMProvider, Msg, ToolDef, ToolResultBlock } from "./types";
 
+export type ToolContext = {
+  reportStatus: (text: string) => void;                   // progress shown to the user while the tool runs
+};
+
 export type Tool = {
   definition: ToolDef;                                    // what the LLM sees
-  run: (input: Record<string, unknown>) => Promise<unknown>; // what actually executes
+  run: (input: Record<string, unknown>, context: ToolContext) => Promise<unknown>; // what actually executes
 };
 
 export type AgentConfig = {
@@ -25,12 +29,15 @@ export class ChatAgent {
 
   async handleMessage(
     history: Msg[], 
-    userText: string
+    userText: string,
+    options: { onStatus?: (text: string) => void } = {}
 ): Promise<{ reply: string; history: Msg[] }> {
     const messages: Msg[] = [...history, { role: "user", content: userText }];
     const maxIterations = this.config.maxIterations ?? 10;
+    const context: ToolContext = { reportStatus: options.onStatus ?? (() => {}) };
 
     for (let i = 0; i < maxIterations; i++) {
+      context.reportStatus("Thinking…");
       const res = await this.config.provider.createResponse({
         model: this.config.model,
         system: this.config.system,
@@ -53,7 +60,7 @@ export class ChatAgent {
             return { type: "tool_result", callId: call.id, content: `Unknown tool: ${call.name}`, isError: true };
           }
           try {
-            const output = await tool.run(call.input);
+            const output = await tool.run(call.input, context);
             return { type: "tool_result", callId: call.id, content: JSON.stringify(output) };
           } catch (err) {
             return { type: "tool_result", callId: call.id, content: String(err), isError: true };

@@ -1,24 +1,27 @@
 import "server-only";
 
-import { ChatAgent, OpenAIProvider, type Tool } from "@/lib/llm";
-import { lookupWatchedByUsernames } from "@/lib/data/watchboxd-room";
+import { ChatAgent, OpenAIProvider, type Tool, type ToolContext } from "@/lib/llm";
+import { lookupLetterboxdRatings, lookupWatchedByUsernames } from "@/lib/data/watchboxd-room";
 import {
   discoverTmdbMovies,
   searchTmdbKeywords,
   searchTmdbMovies,
   searchTmdbPeople,
   TMDB_MOVIE_GENRES,
+  type TmdbDiscoverFilters,
   type TmdbDiscoverSort,
   type TmdbMovieSearchPage,
 } from "@/lib/tmdb/client";
 
 const MOVIE_SEARCH_SYSTEM_PROMPT = `You help members of a movie club find films.
 Always look movies up with your tools instead of answering from memory.
-- Use discover_movies to browse by any combination of genre, era, runtime, language, rating, cast, crew (directors, writers), or keywords (themes like "heist" or "time travel"). E.g. "Wes Anderson films with Bill Murray" or "best 80s horror".
+- Use discover_movies to browse by any combination of genre, era, runtime, language, Letterboxd rating, cast, crew (directors, writers), or keywords (themes like "heist" or "time travel"). E.g. "Wes Anderson films with Bill Murray" or "best 80s horror".
 - Use search_movies when the user names or hints at a specific title.
 - If discover_movies reports matched people or keywords that look wrong, retry with a more specific name.
-- When the user wants movies they (or their group) haven't seen, pass their Letterboxd usernames as excludeWatchedBy. Ask for the usernames if you don't have them. If a filtered page comes back short, fetch the next page.
-Reply briefly. For each candidate give the title, release year, and TMDB id.
+- When the user wants movies they (or their group) haven't seen, pass their Letterboxd usernames as excludeWatchedBy. Ask for the usernames if you don't have them.
+- The tools already remove watched films, wait for Letterboxd ratings, and rank the shortlist. Present results in the order returned. Don't call a tool again for more results unless the user asks; then pass nextPage.
+- Ratings are Letterboxd averages out of 5. Never quote TMDB scores.
+Reply briefly, one line per film, like: Godzilla Minus One (2023) · 4.1/5 on Letterboxd · TMDB id 940721
 If nothing matches, say so and ask for more detail.`;
 
 type GenreName = keyof typeof TMDB_MOVIE_GENRES;
@@ -29,54 +32,71 @@ const SORT_OPTIONS: Record<string, TmdbDiscoverSort> = {
   newest: "primary_release_date.desc",
 };
 
+// discover_movies keeps fetching TMDB pages until this many movies survive the
+// watched and rating filters, within PAGES_PER_BATCH * MAX_BATCHES pages
+const SHORTLIST_SIZE = 10;
+const PAGES_PER_BATCH = 3;
+const MAX_BATCHES = 2;
+
 // Only what the model needs, to keep tool results small
-function summarizeResults(result: TmdbMovieSearchPage) {
+function summarizeMovies(result: TmdbMovieSearchPage) {
+  return result.results.map((movie) => ({
+    tmdbId: movie.tmdbId,
+    title: movie.title,
+    releaseYear: movie.releaseYear,
+    overview: movie.overview,
+  }));
+}
+
+type MovieSummary = ReturnType<typeof summarizeMovies>[number];
+
+// Drops movies any of the users has logged on Letterboxd, then attaches each
+// remaining movie's Letterboxd average rating. Both lookups wait on Watchboxd.
+async function removeWatchedAndRate(
+  movies: MovieSummary[],
+  usernames: string[],
+  reportStatus: ToolContext["reportStatus"],
+) {
+  if (usernames.length > 0) {
+    const whose = usernames.length === 1 ? `${usernames[0]}'s` : "your group's";
+    reportStatus(`Cross-checking with ${whose} watched history…`);
+  }
+  const { watchedBy, uncheckedTmdbIds } = await lookupWatchedByUsernames(
+    usernames,
+    movies.map((movie) => movie.tmdbId),
+  );
+  const unwatched = movies.filter((movie) => !watchedBy.has(movie.tmdbId));
+  const removedAsWatched = movies
+    .filter((movie) => watchedBy.has(movie.tmdbId))
+    .map((movie) => ({ title: movie.title, watchedBy: watchedBy.get(movie.tmdbId) }));
+
+  reportStatus("Getting Letterboxd ratings…");
+  const ratings = await lookupLetterboxdRatings(unwatched.map((movie) => movie.tmdbId));
+
   return {
-    page: result.page,
-    totalPages: result.totalPages,
-    results: result.results.map((movie) => ({
-      tmdbId: movie.tmdbId,
-      title: movie.title,
-      releaseYear: movie.releaseYear,
-      overview: movie.overview,
-      voteAverage: movie.voteAverage,
+    results: unwatched.map((movie) => ({
+      ...movie,
+      letterboxdRating: ratings.get(movie.tmdbId) ?? null,
     })),
+    removedAsWatched,
+    uncheckedCount: uncheckedTmdbIds.length,
   };
+}
+
+type CheckedMovies = Awaited<ReturnType<typeof removeWatchedAndRate>>;
+
+function watchStatusNote(uncheckedCount: number) {
+  return uncheckedCount > 0
+    ? { watchStatusNote: `${uncheckedCount} results couldn't be checked against watched history because Letterboxd took too long, so they were kept.` }
+    : {};
 }
 
 const EXCLUDE_WATCHED_BY_SCHEMA = {
   type: "array",
   items: { type: "string" },
   maxItems: 10,
-  description:
-    "Letterboxd usernames (1-10). Drops movies any of them has watched. Filtering happens after TMDB returns the page, so fewer than 20 results may come back.",
+  description: "Letterboxd usernames (1-10). Drops movies any of them has watched.",
 };
-
-// Drops movies any of the users has logged on Letterboxd, and reports what was dropped
-async function removeWatched(
-  summary: ReturnType<typeof summarizeResults>,
-  usernames: string[],
-) {
-  if (usernames.length === 0) return summary;
-
-  const { watchedBy, uncheckedTmdbIds } = await lookupWatchedByUsernames(
-    usernames,
-    summary.results.map((movie) => movie.tmdbId),
-  );
-  const unwatched = summary.results.filter((movie) => !watchedBy.has(movie.tmdbId));
-  const removedAsWatched = summary.results
-    .filter((movie) => watchedBy.has(movie.tmdbId))
-    .map((movie) => ({ title: movie.title, watchedBy: watchedBy.get(movie.tmdbId) }));
-
-  return {
-    ...summary,
-    results: unwatched,
-    removedAsWatched,
-    ...(uncheckedTmdbIds.length > 0 && {
-      watchStatusNote: `${uncheckedTmdbIds.length} results were kept unchecked because Letterboxd history is still syncing or unavailable (tmdbIds: ${uncheckedTmdbIds.join(", ")}). Retrying in a few seconds may filter them.`,
-    }),
-  };
-}
 
 function optionalNumber(value: unknown) {
   return typeof value === "number" ? value : undefined;
@@ -114,7 +134,8 @@ async function resolveKeyword(term: string) {
 export const searchMoviesTool: Tool = {
   definition: {
     name: "search_movies",
-    description: "Search TMDB for movies by title. Returns up to 20 results per page.",
+    description:
+      "Search TMDB for movies by title. Returns up to 20 results per page, each with its Letterboxd rating out of 5 (null if unknown).",
     inputSchema: {
       type: "object",
       properties: {
@@ -125,11 +146,21 @@ export const searchMoviesTool: Tool = {
       required: ["query"],
     },
   },
-  async run(input) {
-    const result = await searchTmdbMovies(String(input.query), {
-      page: optionalNumber(input.page),
-    });
-    return removeWatched(summarizeResults(result), stringList(input.excludeWatchedBy));
+  async run(input, { reportStatus }) {
+    const query = String(input.query);
+    reportStatus(`Searching for "${query}"…`);
+    const result = await searchTmdbMovies(query, { page: optionalNumber(input.page) });
+    const { uncheckedCount, ...checked } = await removeWatchedAndRate(
+      summarizeMovies(result),
+      stringList(input.excludeWatchedBy),
+      reportStatus,
+    );
+    return {
+      page: result.page,
+      totalPages: result.totalPages,
+      ...checked,
+      ...watchStatusNote(uncheckedCount),
+    };
   },
 };
 
@@ -137,7 +168,7 @@ export const discoverMoviesTool: Tool = {
   definition: {
     name: "discover_movies",
     description:
-      "Browse TMDB movies by metadata and people. All filters combine with AND. Returns up to 20 results per page, plus the people and keywords each name was matched to.",
+      `Browse TMDB movies by metadata and people. All filters combine with AND. Returns a shortlist of up to ${SHORTLIST_SIZE} movies with their Letterboxd ratings out of 5 (null if unknown), already filtered and ranked, plus the people and keywords each name was matched to.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -179,7 +210,12 @@ export const discoverMoviesTool: Tool = {
           type: "string",
           description: 'Two-letter ISO 639-1 code of the original language, e.g. "ko", "fr"',
         },
-        minRating: { type: "number", minimum: 0, maximum: 10, description: "Minimum TMDB vote average" },
+        minLetterboxdRating: {
+          type: "number",
+          minimum: 0,
+          maximum: 5,
+          description: "Minimum Letterboxd average rating out of 5. Movies without a known rating are dropped.",
+        },
         minVotes: {
           type: "integer",
           minimum: 0,
@@ -189,14 +225,19 @@ export const discoverMoviesTool: Tool = {
         sortBy: {
           type: "string",
           enum: Object.keys(SORT_OPTIONS),
-          description: "Defaults to popularity",
+          description:
+            'Defaults to popularity. "rating" draws from TMDB\'s top-rated films, then ranks the shortlist by Letterboxd rating.',
         },
-        page: { type: "integer", minimum: 1, description: "Results page, defaults to 1" },
+        page: {
+          type: "integer",
+          minimum: 1,
+          description: "TMDB page to start from, defaults to 1. Pass nextPage from an earlier result to see more.",
+        },
         excludeWatchedBy: EXCLUDE_WATCHED_BY_SCHEMA,
       },
     },
   },
-  async run(input) {
+  async run(input, { reportStatus }) {
     const genreIds = toGenreIds(stringList(input.genres));
     const excludeGenreIds = toGenreIds(stringList(input.excludeGenres));
     const sortBy =
@@ -207,36 +248,75 @@ export const discoverMoviesTool: Tool = {
     const runtimeMax = optionalNumber(input.maxRuntime);
     const defaultRuntimeMin = runtimeMax !== undefined && runtimeMax < 60 ? undefined : 60;
 
+    const names = [...stringList(input.cast), ...stringList(input.crew), ...stringList(input.keywords)];
+    if (names.length > 0) reportStatus(`Looking up ${names.join(", ")}…`);
     const [cast, crew, keywords] = await Promise.all([
       Promise.all(stringList(input.cast).map(resolvePerson)),
       Promise.all(stringList(input.crew).map(resolvePerson)),
       Promise.all(stringList(input.keywords).map(resolveKeyword)),
     ]);
 
-    const result = await discoverTmdbMovies(
-      {
-        genreIds,
-        excludeGenreIds,
-        castIds: cast.map((person) => person.tmdbPersonId),
-        crewIds: crew.map((person) => person.tmdbPersonId),
-        keywordIds: keywords.map((keyword) => keyword.tmdbKeywordId),
-        releaseYearFrom: optionalNumber(input.yearFrom),
-        releaseYearTo: optionalNumber(input.yearTo),
-        runtimeMin: optionalNumber(input.minRuntime) ?? defaultRuntimeMin,
-        runtimeMax,
-        originalLanguage:
-          typeof input.originalLanguage === "string" ? input.originalLanguage.toLowerCase() : undefined,
-        minRating: optionalNumber(input.minRating),
-        minVoteCount: optionalNumber(input.minVotes) ?? 200,
-        sortBy,
-      },
-      { page: optionalNumber(input.page) },
-    );
+    const filters: TmdbDiscoverFilters = {
+      genreIds,
+      excludeGenreIds,
+      castIds: cast.map((person) => person.tmdbPersonId),
+      crewIds: crew.map((person) => person.tmdbPersonId),
+      keywordIds: keywords.map((keyword) => keyword.tmdbKeywordId),
+      releaseYearFrom: optionalNumber(input.yearFrom),
+      releaseYearTo: optionalNumber(input.yearTo),
+      runtimeMin: optionalNumber(input.minRuntime) ?? defaultRuntimeMin,
+      runtimeMax,
+      originalLanguage:
+        typeof input.originalLanguage === "string" ? input.originalLanguage.toLowerCase() : undefined,
+      minVoteCount: optionalNumber(input.minVotes) ?? 200,
+      sortBy,
+    };
+    const usernames = stringList(input.excludeWatchedBy);
+    const minLetterboxdRating = optionalNumber(input.minLetterboxdRating);
+
+    // The watched and rating filters can drop most of a page, so fetch TMDB
+    // pages in parallel batches until the shortlist is full
+    const shortlist: CheckedMovies["results"] = [];
+    const removedAsWatched: CheckedMovies["removedAsWatched"] = [];
+    const checkedTmdbIds = new Set<number>();
+    let uncheckedCount = 0;
+    let nextPage = optionalNumber(input.page) ?? 1;
+    let totalPages = Infinity;
+
+    for (let batch = 0; batch < MAX_BATCHES && shortlist.length < SHORTLIST_SIZE && nextPage <= totalPages; batch++) {
+      if (batch > 0) reportStatus("Not enough matches yet, checking more movies…");
+      else reportStatus(input.sortBy === "rating" ? "Finding the best-rated movies…" : "Finding matching movies…");
+
+      const pageNumbers = Array.from({ length: PAGES_PER_BATCH }, (_, i) => nextPage + i)
+        .filter((page) => page <= totalPages);
+      const pages = await Promise.all(pageNumbers.map((page) => discoverTmdbMovies(filters, { page })));
+      totalPages = pages[0].totalPages;
+      nextPage += pageNumbers.length;
+
+      const candidates = pages.flatMap(summarizeMovies).filter((movie) => !checkedTmdbIds.has(movie.tmdbId));
+      for (const movie of candidates) checkedTmdbIds.add(movie.tmdbId);
+
+      const checked = await removeWatchedAndRate(candidates, usernames, reportStatus);
+      shortlist.push(...checked.results.filter(
+        (movie) =>
+          minLetterboxdRating === undefined
+          || (movie.letterboxdRating !== null && movie.letterboxdRating >= minLetterboxdRating),
+      ));
+      removedAsWatched.push(...checked.removedAsWatched);
+      uncheckedCount += checked.uncheckedCount;
+    }
+
+    const ranked = input.sortBy === "rating"
+      ? shortlist.toSorted((a, b) => (b.letterboxdRating ?? -1) - (a.letterboxdRating ?? -1))
+      : shortlist;
 
     // Echo what each name resolved to so the model can catch a wrong match
     return {
       matched: { cast, crew, keywords },
-      ...(await removeWatched(summarizeResults(result), stringList(input.excludeWatchedBy))),
+      results: ranked.slice(0, SHORTLIST_SIZE),
+      nextPage: nextPage <= totalPages ? nextPage : null,
+      removedAsWatched,
+      ...watchStatusNote(uncheckedCount),
     };
   },
 };
