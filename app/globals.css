@@ -1443,6 +1443,24 @@ button { color: inherit; }
 .nomination-panel .watched-avatar.is-fallback { color: #f5e08a; background: rgba(247, 225, 74, .12); }
 .nomination-panel .movie-result-list .button-secondary { border-color: #f7e14a; color: #f7e14a; background: transparent; }
 .nomination-panel .movie-result-list .button-secondary:hover { background: #f7e14a; color: #0c0806; }
+/* Movie bot: chat with the movie search agent; its picks reuse the search result rows above */
+.movie-agent { margin-top: 4px; padding: 20px; border: 1px solid rgba(247, 225, 74, .25); border-radius: 10px; background: linear-gradient(180deg, rgba(20, 40, 88, .96), rgba(10, 22, 54, .97)); box-shadow: 0 12px 28px rgba(4, 10, 28, .35); }
+.movie-agent .eyebrow { color: #f5e08a; }
+.movie-agent-intro { margin: 5px 0 0; color: rgba(224, 231, 255, .68); font-size: 10px; line-height: 1.4; }
+.movie-agent-thread { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.movie-agent-message { color: #e0e7ff; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+.movie-agent-message p { margin: 0; }
+.movie-agent-message.is-user { justify-self: end; max-width: 85%; padding: 8px 12px; border-radius: 12px 12px 2px 12px; color: #0c0806; background: #f7e14a; }
+.movie-agent-message.is-error { color: #ff9d8a; }
+.movie-agent-message .movie-result-list { white-space: normal; }
+.movie-agent-status { margin: 12px 0 0; display: flex; align-items: center; gap: 8px; color: #f5e08a; font-size: 11px; }
+.movie-agent-compose { margin-top: 16px; display: flex; gap: 8px; }
+.movie-agent-compose input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid rgba(247, 225, 74, .35); border-radius: 7px; color: #fdfdfa; background: rgba(10, 20, 45, .6); font-size: 12px; }
+.movie-agent-compose input::placeholder { color: rgba(245, 224, 80, .5); }
+.movie-agent-compose input:focus { outline: none; border-color: #f7e14a; box-shadow: 0 0 0 3px rgba(245, 224, 80, .25); }
+.movie-agent .button-secondary { border-color: #f7e14a; color: #f7e14a; background: transparent; }
+.movie-agent .button-secondary:hover:not(:disabled) { background: #f7e14a; color: #0c0806; }
+.movie-agent .movie-search-pagination span { color: rgba(247, 225, 74, .7); }
 .nomination-panel .selected-selections {
   padding-top: 22px;
   margin-top: 4px;

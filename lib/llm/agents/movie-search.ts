@@ -21,8 +21,25 @@ Always look movies up with your tools instead of answering from memory.
 - When the user wants movies they (or their group) haven't seen, pass their Letterboxd usernames as excludeWatchedBy. Ask for the usernames if you don't have them.
 - The tools already remove watched films, wait for Letterboxd ratings, and rank the shortlist. Present results in the order returned. Don't call a tool again for more results unless the user asks; then pass nextPage.
 - Ratings are Letterboxd averages out of 5. Never quote TMDB scores.
-Reply briefly, one line per film, like: Godzilla Minus One (2023) · 4.1/5 on Letterboxd · TMDB id 940721
+Reply in plain text without markdown. Write one short sentence introducing the picks, then put each film on its own line as only its marker, like:
+[tmdb:940721]
+The app turns each marker into a card with the poster, title, year, Letterboxd rating and description, so don't repeat those details. Whenever you mention a specific film, include its marker line.
 If nothing matches, say so and ask for more detail.`;
+
+const MOVIE_MARKER = /\[tmdb:(\d+)\]/g;
+const MAX_MOVIES_PER_REPLY = 20;
+
+// Splits a reply into the prose to show and the TMDB ids to show as cards, in
+// order. Marker lines are dropped from the prose even if the model added text to them.
+export function splitAgentReply(reply: string) {
+  const text = reply
+    .split("\n")
+    .filter((line) => !line.match(MOVIE_MARKER))
+    .join("\n")
+    .trim();
+  const tmdbIds = [...new Set([...reply.matchAll(MOVIE_MARKER)].map((match) => Number(match[1])))];
+  return { text, tmdbIds: tmdbIds.slice(0, MAX_MOVIES_PER_REPLY) };
+}
 
 type GenreName = keyof typeof TMDB_MOVIE_GENRES;
 
@@ -95,7 +112,8 @@ const EXCLUDE_WATCHED_BY_SCHEMA = {
   type: "array",
   items: { type: "string" },
   maxItems: 10,
-  description: "Letterboxd usernames (1-10). Drops movies any of them has watched.",
+  description:
+    "Letterboxd usernames (up to 10). Drops movies any of them has watched. In a room this defaults to every member with Letterboxd; pass a narrower list, or [] to include watched movies.",
 };
 
 function optionalNumber(value: unknown) {
@@ -321,11 +339,23 @@ export const discoverMoviesTool: Tool = {
   },
 };
 
-export function createMovieSearchAgent() {
+// Filters out movies these users have watched unless the model passes its own excludeWatchedBy
+function withDefaultWatchedFilter(tool: Tool, usernames: string[]): Tool {
+  return {
+    ...tool,
+    run: (input, context) =>
+      tool.run(input.excludeWatchedBy === undefined ? { ...input, excludeWatchedBy: usernames } : input, context),
+  };
+}
+
+// In a room, context tells the agent who is chatting, and every search leaves out
+// movies any member has logged on Letterboxd by default
+export function createMovieSearchAgent(room?: { context: string; letterboxdUsernames: string[] }) {
+  const tools = [searchMoviesTool, discoverMoviesTool];
   return new ChatAgent({
     provider: new OpenAIProvider(),
-    system: MOVIE_SEARCH_SYSTEM_PROMPT,
-    tools: [searchMoviesTool, discoverMoviesTool],
+    system: room ? `${MOVIE_SEARCH_SYSTEM_PROMPT}\n\n${room.context}` : MOVIE_SEARCH_SYSTEM_PROMPT,
+    tools: room ? tools.map((tool) => withDefaultWatchedFilter(tool, room.letterboxdUsernames)) : tools,
     maxIterations: 5,
   });
 }

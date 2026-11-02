@@ -1,14 +1,6 @@
-import {
-  applyWatchedIndexToMovie,
-  toSelectionMovie,
-} from "@/app/rooms/[code]/selection-contracts";
 import { noStoreJson, requireRoomMemberApi } from "@/app/api/rooms/[code]/member-request";
+import { toRoomSelectionMovies } from "@/app/api/rooms/[code]/movies/room-selection-movies";
 import { AuthorizationError, DomainError } from "@/lib/auth/errors";
-import { listRoomMovieNominationSummaries } from "@/lib/data/nominations";
-import {
-  lookupRoomWatchedIndex,
-  lookupWatchboxdMovies,
-} from "@/lib/data/watchboxd-room";
 import {
   MAXIMUM_SEARCH_PAGE,
   normalizeSearchPage,
@@ -85,43 +77,16 @@ export async function GET(
       signal: request.signal,
     });
     const paginated = paginateTmdbSearchPage(tmdbPage, searchPage);
-    const tmdbIds = paginated.results.map((movie) => movie.tmdbId);
-    const [summaries, ratings, watched] = await Promise.all([
-      listRoomMovieNominationSummaries(access.room.id, tmdbIds),
-      lookupWatchboxdMovies(tmdbIds, request.signal),
-      lookupRoomWatchedIndex({
-        participants: access.room.participants,
-        currentUserId: access.user.id,
-        tmdbIds,
-        signal: request.signal,
-      }),
-    ]);
-    const extrasByTmdbId = new Map(
-      summaries.map((summary) => [summary.tmdbId, summary]),
-    );
-    const ratingsByTmdbId = new Map(
-      ratings.map((rating) => [rating.tmdbId, rating]),
-    );
+    const results = await toRoomSelectionMovies({
+      roomId: access.room.id,
+      participants: access.room.participants,
+      currentUserId: access.user.id,
+      movies: paginated.results,
+      signal: request.signal,
+    });
 
     return noStoreJson({
-      results: paginated.results.map((movie) => {
-        const extras = extrasByTmdbId.get(movie.tmdbId);
-        const rating = ratingsByTmdbId.get(movie.tmdbId);
-        return applyWatchedIndexToMovie(toSelectionMovie({
-          tmdbId: movie.tmdbId,
-          title: movie.title,
-          releaseYear: movie.releaseYear,
-          overview: movie.overview,
-          posterPath: movie.posterPath,
-          tmdbRating: movie.voteAverage,
-          letterboxdRating: rating?.letterboxdRating ?? extras?.letterboxdRating ?? null,
-          letterboxdRatingJobId: rating?.letterboxdRatingJobId ?? null,
-          letterboxdUrl: rating?.letterboxdUrl ?? null,
-          letterboxdSlug: rating?.letterboxdSlug ?? null,
-          posterUrl: rating?.posterUrl ?? null,
-          alreadyNominatedBy: extras && extras.nominatedBy.length > 0 ? ["other"] : [],
-        }), watched);
-      }),
+      results,
       suggestions: [],
       page: paginated.page,
       totalPages: paginated.totalPages,
