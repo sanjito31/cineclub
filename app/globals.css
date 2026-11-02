@@ -3233,6 +3233,11 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
 .tv-input-field::placeholder { color: #a99a89; font-weight: 400; }
 .tv-input-field--code { text-align: center; letter-spacing: .3em; text-transform: uppercase; font-family: var(--font-tagline), Georgia, serif; font-size: 22px;  color: var(--stroke-fill);  -webkit-text-stroke: 1px var(--stroke-ink); paint-order: stroke fill; text-shadow: -1px -1px 0 var(--stroke-ink), 1px -1px 0 var(--stroke-ink), -1px 1px 0 var(--stroke-ink), 1px 1px 0 var(--stroke-ink); }
 .tv-input-tile .action-message { margin-top: 10px; }
+.tv-input-field + .tv-input-label { margin-top: 10px; }
+.tv-wall--idle .tv-input-tile .tv-screen { justify-content: safe center; overflow-y: auto; }
+.tv-input-field:read-only { opacity: .7; }
+.tv-text-button { align-self: center; margin-top: 10px; padding: 0; border: 0; background: none; color: #f0c74e; font-family: var(--font-tagline); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.tv-footnote-button .tv-footnote-text { display: block; color: #f0c74e; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Join's room-code input now lives inside the headline tile itself
    (one box: headline copy + the field) instead of a separate tile. */
@@ -3366,7 +3371,7 @@ button.tv-screen, a.tv-screen { cursor: pointer; }
   .tv-brand-mark-wrap { width: 28px; height: 29px; }
   .tv-brand-word { font-size: 13px; margin-left: -6px; }
 
-  .tv-wall--idle { grid-template-rows: repeat(7, minmax(0, 1fr)); }
+  .tv-wall--idle { grid-template-rows: minmax(0,.8fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.35fr) minmax(0,1.35fr) minmax(0,.7fr); }
   .tv-wall--idle .tv-e1b { display: none; }
   .tv-wall--idle .tv-logo { grid-column: 1; grid-row: 1; }
   .tv-wall--idle .tv-e1 { grid-column: 2; grid-row: 1; }
