@@ -16,6 +16,7 @@ import {
   type WatchedIndex,
   type WatchedMember,
 } from "@/lib/domain/watchboxd-selection";
+import { pollAsyncResource } from "@/lib/integrations/async-resource";
 import { getTmdbMovie } from "@/lib/tmdb/client";
 import {
   decodeWatchboxdMovie,
@@ -31,6 +32,12 @@ import {
   getWatchboxdWatchedHistory,
 } from "@/lib/watchboxd/client";
 import { WatchboxdInputError } from "@/lib/watchboxd/core";
+import type {
+  WatchboxdCollectionPage,
+  WatchboxdMovie,
+  WatchboxdWatchedItem,
+  WatchboxdWatchedOverlapPage,
+} from "@/lib/watchboxd/decode";
 
 export type MovieRatingLookup = {
   tmdbId: number;
@@ -286,6 +293,85 @@ export async function lookupRoomWatchedIndex(input: {
     addWatchedPageToIndex(watched, result.data, watchedMember);
   }
   return watched;
+}
+
+export type WatchedByUsernames = {
+  watchedBy: Map<number, string[]>; // tmdbId -> usernames that watched it
+  uncheckedTmdbIds: number[];       // history still syncing or unavailable
+};
+
+// How long the movie search agent waits on Watchboxd while it syncs a history
+// or scrapes a film it hasn't seen before
+const AGENT_WAIT_TIMEOUT_MS = 20_000;
+const AGENT_WAIT_MAX_ATTEMPTS = 10;
+
+// Checks each movie by TMDB id instead of loading full histories, which are
+// capped at MAXIMUM_WATCHED_PAGES and would miss films for heavy loggers.
+// Waits for pending results, so unchecked only means Watchboxd took too long.
+export async function lookupWatchedByUsernames(
+  usernames: readonly string[],
+  tmdbIds: readonly number[],
+  signal?: AbortSignal,
+): Promise<WatchedByUsernames> {
+  const uniqueUsernames = [...new Set(
+    usernames.map((username) => username.trim().toLowerCase()).filter(Boolean),
+  )];
+  if (uniqueUsernames.length === 0) {
+    return { watchedBy: new Map(), uncheckedTmdbIds: [] };
+  }
+
+  const checks = await Promise.all(
+    tmdbIds.map(async (tmdbId) => {
+      const query = { tmdbId: String(tmdbId), page: "1", pageSize: "1" };
+      const result = await pollAsyncResource<
+        WatchboxdCollectionPage<WatchboxdWatchedItem> | WatchboxdWatchedOverlapPage
+      >(
+        ({ signal: attemptSignal }) => uniqueUsernames.length === 1
+          ? getWatchboxdWatchedHistory(uniqueUsernames[0], decodeWatchboxdWatchedPage, { query, signal: attemptSignal })
+          : getWatchboxdWatchedOverlap(uniqueUsernames, decodeWatchboxdWatchedOverlapPage, { query, signal: attemptSignal }),
+        { signal, timeoutMs: AGENT_WAIT_TIMEOUT_MS, maxAttempts: AGENT_WAIT_MAX_ATTEMPTS },
+      );
+
+      if (result.status === "not_found") {
+        throw new WatchboxdInputError(
+          `Letterboxd user not found: ${uniqueUsernames.join(", ")}`,
+        );
+      }
+      if (result.status !== "ready") return { tmdbId, checked: false, watchers: [] };
+
+      const watchers = "items" in result.data
+        ? (result.data.items.length > 0 ? [uniqueUsernames[0]] : [])
+        : (result.data.films[0]?.watchedBy.map((user) => user.username) ?? []);
+      return { tmdbId, checked: true, watchers };
+    }),
+  );
+
+  return {
+    watchedBy: new Map(
+      checks
+        .filter((check) => check.watchers.length > 0)
+        .map((check) => [check.tmdbId, check.watchers]),
+    ),
+    uncheckedTmdbIds: checks.filter((check) => !check.checked).map((check) => check.tmdbId),
+  };
+}
+
+// Letterboxd average rating (out of 5) per TMDB id, null when Letterboxd has
+// none or Watchboxd didn't finish scraping the film in time
+export async function lookupLetterboxdRatings(
+  tmdbIds: readonly number[],
+  signal?: AbortSignal,
+): Promise<Map<number, number | null>> {
+  const ratings = await Promise.all(
+    [...new Set(tmdbIds)].map(async (tmdbId) => {
+      const result = await pollAsyncResource<WatchboxdMovie>(
+        ({ signal: attemptSignal }) => getWatchboxdMovie(tmdbId, decodeWatchboxdMovie, { signal: attemptSignal }),
+        { signal, timeoutMs: AGENT_WAIT_TIMEOUT_MS, maxAttempts: AGENT_WAIT_MAX_ATTEMPTS },
+      );
+      return [tmdbId, result.status === "ready" ? result.data.letterboxdRating : null] as const;
+    }),
+  );
+  return new Map(ratings);
 }
 
 async function tmdbSnapshotForId(tmdbId: number | null, signal?: AbortSignal) {

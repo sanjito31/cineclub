@@ -60,6 +60,7 @@ export default async function RoomSelectionPage({
           watchboxdEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/watchboxd`}
           ratingsEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/ratings`}
           letterboxdMoviesEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movies/letterboxd`}
+          agentEndpoint={`/api/rooms/${encodeURIComponent(room.code)}/movie-agent`}
           submitSelectionsAction={submitNominationsAction}
           initialSelections={initialSelections}
           hasSubmittedSelections={alreadySubmitted}

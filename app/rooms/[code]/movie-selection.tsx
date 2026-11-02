@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { initialActionState } from "@/app/actions/types";
 import { ActionMessage } from "@/app/components/action-message";
+import { MovieAgentChat } from "@/app/rooms/[code]/movie-agent-chat";
 import {
   applyRatingLookupToMovie, applyWatchedIndexToMovie, createSelectionSlots,
   duplicateSelectionIds, letterboxdMovieUrlFromTmdbId, moviePosterSrc,
@@ -146,11 +147,11 @@ function optionalNumber(value: string) {
 
 export function MovieSelection({
   code, roomName, selectionsPerUser, searchEndpoint, watchboxdEndpoint, ratingsEndpoint,
-  letterboxdMoviesEndpoint, submitSelectionsAction, initialSelections = [],
+  letterboxdMoviesEndpoint, agentEndpoint, submitSelectionsAction, initialSelections = [],
   hasSubmittedSelections = false,
 }: {
   code: string; roomName: string; selectionsPerUser: number; searchEndpoint: string; watchboxdEndpoint: string;
-  ratingsEndpoint: string; letterboxdMoviesEndpoint: string;
+  ratingsEndpoint: string; letterboxdMoviesEndpoint: string; agentEndpoint: string;
   submitSelectionsAction: SubmitSelectionsAction; initialSelections?: SelectionSlotValue[];
   initialSuggestions?: SelectionMovie[];
   hasSubmittedSelections?: boolean;
@@ -646,6 +647,11 @@ export function MovieSelection({
             <button className="button button-secondary button-compact" type="button" disabled={overlap.page >= overlap.totalPages || overlapPageLoading} onClick={() => void loadOverlapPage(overlap.page + 1)}>Next</button>
           </div> : null}
         </section> : null}
+
+        <MovieAgentChat endpoint={agentEndpoint} renderMovie={(movie) => <>
+          <LetterboxdMovieLink movie={movie}><MovieDetails movie={movie} /></LetterboxdMovieLink>
+          {isSelected(movie.tmdbId) ? <SelectedCheck title={movie.title} /> : <button className="button button-secondary button-compact" type="button" onClick={() => chooseMovie(movie)} disabled={allSlotsFilled}>Choose</button>}
+        </>} />
 
         <section className="selected-selections" aria-labelledby="selected-selections-heading">
           <div className="selection-section-heading"><div><span id="selected-selections-heading" className="eyebrow">Find your movie</span></div><span>{allSlotsFilled ? "All choices filled" : `${selectionsPerUser - completedSlots} remaining`}</span></div>
